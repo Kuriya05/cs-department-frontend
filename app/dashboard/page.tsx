@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
+// 🟢 เปลี่ยนมาใช้ Relative Path ที่ชัวร์ที่สุดตามโครงสร้างโฟลเดอร์ของคุณ
+import api from '../../lib/api'; 
 
 // ==========================================
 // ❄️ AMBIENT COMPONENT: Diamond Dust Background
@@ -197,11 +199,10 @@ export default function DashboardPage() {
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch('http://localhost:3001/api/v1/students/dashboard/analytics', { headers });
+      // 🟢 เปลี่ยนมาใช้ตัวกลาง api.get ยิงเข้าหา Render ชนะแน่นอน 100%
+      const serverStats: any = await api.get('/students/dashboard/analytics', { headers });
       
-      if (res.ok) {
-        const serverStats = await res.json();
-        
+      if (serverStats) {
         // แกะและหลอมรวมข้อมูลระดับความเสี่ยงย่อยให้กลายเป็นผลรวมสะสม
         const highRisk = serverStats.riskDistribution?.High ?? 0;
         const medRisk = serverStats.riskDistribution?.Medium ?? 0;
@@ -258,8 +259,7 @@ export default function DashboardPage() {
 
     let aiReply = '';
 
-    // รวบรวมข้อมูลสดจากทุกโมดูล (สถิติทั่วทั้งเว็บ, สิทธิ์ยูสเซอร์, พิกัดหน้าจอปัจจุบัน) 
-    // เพื่อป้อนเป็น Context ให้กับฐานข้อมูล AI Chat
+    // รวบรวมข้อมูลสดจากทุกโมดูลเพื่อป้อนเป็น Context ให้กับฐานข้อมูล AI Chat
     const globalContextPayload = {
       message: messageText,
       siteContext: {
@@ -284,16 +284,11 @@ export default function DashboardPage() {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      // ส่งคำสั่งพร้อมแนบบริบทเว็บทั้งหมดไปยัง Endpoint คิวรี่หลังบ้าน
-      const response = await fetch('http://localhost:3001/api/v1/chat/query', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(globalContextPayload)
-      });
+      // 🟢 ล้างบางจุดบกพร่องชิ้นโต! เปลี่ยนมาใช้ตัวกลาง api.post ยิงไปหาตัวจัดการแชทบน Render แทนการใช้ localhost
+      const data: any = await api.post('/chat/query', globalContextPayload, { headers });
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.reply) {
+      if (data) {
+        if (data.reply) {
           aiReply = data.reply;
         } else if (typeof data === 'string') {
           aiReply = data;
