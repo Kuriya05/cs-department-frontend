@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
+// 🔌 นำเข้า api ตัวกลางที่เราปรับแต่งไว้ (ตรวจสอบ path เพิ่มเติมหากไฟล์อยู่คนละโฟลเดอร์)
+import api from '@/lib/api';
 
 // 🎯 อินเตอร์เฟสตรงตาม MongoDB Schema
 interface Lecturer {
@@ -94,7 +96,7 @@ function CosmicAuroraGlow({ theme = "dark" }) {
   );
 }
 
-// 🌐 พจนานุกรมแปลภาษา (เพิ่มข้อมูลภาควิชา)
+// 🌐 พจนานุกรมแปลภาษา
 const translations = {
   TH: {
     hubBadge: 'Executive Intelligence Hub',
@@ -171,7 +173,6 @@ export default function LecturersWorkloadPage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [lecturers, setLecturers] = useState<Lecturer[]>([]);
   
-  // ⚙️ เพิ่มฟิลด์ department ใน State ของ Form
   const [form, setForm] = useState({ 
     lecturerId: '', 
     academicTitle: 'อาจารย์', 
@@ -188,20 +189,15 @@ export default function LecturersWorkloadPage() {
 
   const t = translations[lang];
 
-  // 📖 READ (ดึงข้อมูลผ่าน Local IP)
+  // 📖 READ: ดึงข้อมูลผ่านตัวกลาง Axios Instance
   const fetchWorkloadHistory = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://127.0.0.1:3001/api/v1/lecturers?page=1&limit=100', {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      });
-      if (res.ok) {
-        const resData = await res.json();
-        if (Array.isArray(resData)) {
-          setLecturers(resData);
-        } else if (resData && Array.isArray(resData.data)) {
-          setLecturers(resData.data);
-        }
+      const res = await api.get('/api/v1/lecturers?page=1&limit=100');
+      const resData = res.data;
+      if (Array.isArray(resData)) {
+        setLecturers(resData);
+      } else if (resData && Array.isArray(resData.data)) {
+        setLecturers(resData.data);
       }
     } catch (error) {
       console.error("Error fetching real workload database:", error);
@@ -212,7 +208,7 @@ export default function LecturersWorkloadPage() {
     fetchWorkloadHistory();
   }, []);
 
-  // ➕ CREATE & ✏️ UPDATE (รวมส่งฟิลด์ department)
+  // ➕ CREATE & ✏️ UPDATE: ส่งข้อมูลผ่าน Axios Instance
   const handleCalculateWorkload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.lecturerId || !form.name || !form.email || !form.department || isLoading) return;
@@ -234,51 +230,36 @@ export default function LecturersWorkloadPage() {
       status: form.status
     };
 
-    const token = localStorage.getItem('token');
-
     try {
-      let response;
       if (editingId) {
-        response = await fetch(`http://127.0.0.1:3001/api/v1/lecturers/${editingId}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token && { 'Authorization': `Bearer ${token}` })
-          },
-          body: JSON.stringify(payload)
-        });
+        await api.patch(`/api/v1/lecturers/${editingId}`, payload);
       } else {
-        response = await fetch('http://127.0.0.1:3001/api/v1/lecturers', {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            ...(token && { 'Authorization': `Bearer ${token}` })
-          },
-          body: JSON.stringify(payload)
-        });
+        await api.post('/api/v1/lecturers', payload);
       }
 
-      if (response.ok) {
-        await fetchWorkloadHistory();
-        resetForm();
-      } else {
-        const httpStatus = response.status;
-        const errData = await response.json();
-        console.error(`[Server Error ${httpStatus}]:`, errData);
+      await fetchWorkloadHistory();
+      resetForm();
+    } catch (error: any) {
+      console.error("Failed to process workload database request:", error);
+      
+      // ดึงข้อมูล HTTP Error จาก Axios
+      const httpStatus = error.response?.status;
+      const errData = error.response?.data;
+      
+      if (httpStatus && errData) {
         const errorMsg = Array.isArray(errData.message) 
           ? errData.message.join('\n') 
           : errData.message || 'Validation error';
         alert(`Failed (${httpStatus}):\n${errorMsg}`);
+      } else {
+        alert(`Network Error: เซิร์ฟเวอร์หลังบ้านปิดอยู่ หรือการเชื่อมต่อระบบเครือข่ายขัดข้อง`);
       }
-    } catch (error) {
-      console.error("Failed to process workload database request:", error);
-      alert(`Network Error: หลังบ้าน (Port 3001) ปิดอยู่ หรือระบบเครือข่ายขัดข้อง`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ⚙️ PREPARE EDIT (ดึงค่า department มาใส่ในฟอร์มแก้ไข)
+  // ⚙️ PREPARE EDIT
   const startEditLecturer = (lecturer: Lecturer) => {
     if (!lecturer._id) return;
     setEditingId(lecturer._id);
@@ -294,23 +275,16 @@ export default function LecturersWorkloadPage() {
     });
   };
 
-  // 🗑️ DELETE
+  // 🗑️ DELETE: ลบข้อมูลผ่าน Axios Instance
   const handleDeleteLecturer = async (id: string | undefined) => {
     if (!id || isLoading) return;
     if (!window.confirm(t.confirmDelete)) return;
 
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://127.0.0.1:3001/api/v1/lecturers/${id}`, {
-        method: 'DELETE',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      });
-
-      if (response.ok) {
-        await fetchWorkloadHistory();
-        if (editingId === id) resetForm(); 
-      }
+      await api.delete(`/api/v1/lecturers/${id}`);
+      await fetchWorkloadHistory();
+      if (editingId === id) resetForm(); 
     } catch (error) {
       console.error("Failed to delete workload record from database:", error);
     } finally {
@@ -450,7 +424,6 @@ export default function LecturersWorkloadPage() {
                   />
                 </div>
 
-                {/* 🆕 เพิ่มฟิลด์กรอกข้อมูลภาควิชาลงใน UI ฟอร์ม */}
                 <div className="space-y-1">
                   <label className={`text-[10px] font-mono font-bold uppercase tracking-wider block transition-colors duration-500 ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}`}>{t.labelDepartment}</label>
                   <input 
@@ -548,7 +521,6 @@ export default function LecturersWorkloadPage() {
                           <div className={`font-serif text-base font-normal transition-colors duration-500 ${theme === 'dark' ? 'text-zinc-100' : 'text-zinc-900'}`}>
                             {l.academicTitle} {l.name}
                           </div>
-                          {/* 🆕 แสดงผลข้อมูลภาควิชาควบคู่กับอีเมล */}
                           <div className={`text-[11px] font-mono text-zinc-500`}>
                             {l.department || 'N/A'} • {l.email}
                           </div>
