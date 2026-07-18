@@ -7,7 +7,7 @@ import Navbar from '../components/Navbar';
 // ==========================================
 // 🌐 CONFIG: API BASE URL (ดึงจาก Environment Variable บน Vercel อัตโนมัติ)
 // ==========================================
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://cs-department-backend.onrender.com/api/v1';
 
 // ==========================================
 // ❄️ AMBIENT COMPONENT: Diamond Dust Background
