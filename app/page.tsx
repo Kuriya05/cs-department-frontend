@@ -457,7 +457,7 @@ export default function Home() {
             
             <div className="flex flex-col gap-2.5 font-mono text-[11px] tracking-wide">
               <a 
-                href="https://github.com/Kuriya05/ai-cs-department.git" 
+                href="https://github.com/Kuriya05/cs-department-frontend.git" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className={`p-3.5 rounded-xl border text-left flex justify-between items-center transition-all transform-gpu hover:translate-x-1 ${isDark ? 'border-zinc-900 bg-zinc-900/20 hover:border-amber-500/30 hover:bg-zinc-900/50' : 'border-stone-200 bg-stone-50/50 hover:border-amber-700/40 hover:bg-white shadow-3xs'}`}
@@ -467,7 +467,7 @@ export default function Home() {
               </a>
 
               <a 
-                href="https://github.com/Kuriya05/ai-cs-backend.git" 
+                href="https://github.com/Kuriya05/cs-department-backend.git" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className={`p-3.5 rounded-xl border text-left flex justify-between items-center transition-all transform-gpu hover:translate-x-1 ${isDark ? 'border-zinc-900 bg-zinc-900/20 hover:border-amber-500/30 hover:bg-zinc-900/50' : 'border-stone-200 bg-stone-50/50 hover:border-amber-700/40 hover:bg-white shadow-3xs'}`}

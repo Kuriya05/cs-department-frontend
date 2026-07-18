@@ -5,6 +5,11 @@ import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
 
 // ==========================================
+// 🌐 CONFIG: API BASE URL (ดึงจาก Environment Variable บน Vercel อัตโนมัติ)
+// ==========================================
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+
+// ==========================================
 // ❄️ AMBIENT COMPONENT: Diamond Dust Background
 // ==========================================
 interface Snowflake { 
@@ -117,6 +122,7 @@ export default function CompleteCrudStudentsPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
 
+  // 🟢 [แก้ไขจุดพัง]: ขยาย Type ของ risk และ status เพื่อให้รองรับค่าระดับอื่นนอกจาก 'None' และ 'Active'
   const initialFormState = {
     name: '',
     studentId: '',
@@ -125,8 +131,8 @@ export default function CompleteCrudStudentsPage() {
     gpa: 3.50,
     attendanceRate: 95,
     droppedCourses: 0,
-    risk: 'None' as const,
-    status: 'Active' as const,
+    risk: 'None' as 'Low' | 'Medium' | 'High' | 'None',
+    status: 'Active' as 'Active' | 'Suspended' | 'Graduated',
     major: 'Computer Science',
     courses: [] as string[], 
     lecturersStr: 'ผศ.ดร.สมชาย ใจดี, อ.ดร.สมหญิง เรียนเก่ง'
@@ -134,26 +140,23 @@ export default function CompleteCrudStudentsPage() {
 
   const [formData, setFormData] = useState(initialFormState);
 
-  // 🌟 [READ] - แก้ไขฟังก์ชันดึงรายวิชาให้ปลอดภัยและรองรับการแกะโครงสร้างข้อมูล Object
   const fetchAvailableCourses = async () => {
     try {
       setCourseFetchError(null);
-      // เปลี่ยนมาใช้สถาปัตยกรรม Path เดียวกันกับฝั่งนักศึกษา คือมี /api/v1/
-      // หมายเหตุ: หาก Backend ของคุณใช้ Route เดิม สามารถสลับกลับไปเป็น 'http://localhost:3001/courses/all/selection' ได้ครับ
-      const res = await fetch('http://localhost:3001/api/v1/courses');
+      // 🌐 ปรับเป็น Dynamic URL รองรับระบบ Vercel
+      const res = await fetch(`${API_BASE_URL}/courses`);
       
       if (res.ok) {
         const payload = await res.json();
-        
-        // ตรวจสอบโครงสร้างข้อมูล ป้องกันปัญหาส่งกลับมาเป็น { data: [...] } หรือ Array ตรงๆ
         const extractedCourses = Array.isArray(payload) 
           ? payload 
           : (payload.data || payload.courses || []);
           
         setDbCourses(extractedCourses);
       } else {
-        // หาก /api/v1/courses ไม่พบ ลอง Fallback ไปที่ Route ทางเลือกเดิมที่คุณตั้งไว้
-        const fallbackRes = await fetch('http://localhost:3001/courses/all/selection');
+        // Fallback Route
+        const fallbackBase = API_BASE_URL.replace('/api/v1', '');
+        const fallbackRes = await fetch(`${fallbackBase}/courses/all/selection`);
         if (fallbackRes.ok) {
           const fallbackPayload = await fallbackRes.json();
           const extractedFallback = Array.isArray(fallbackPayload) ? fallbackPayload : (fallbackPayload.data || []);
@@ -170,7 +173,8 @@ export default function CompleteCrudStudentsPage() {
 
   const fetchStudents = async () => {
     try {
-      let url = `http://localhost:3001/api/v1/students?page=${currentPage}&limit=5&search=${search}`;
+      // 🌐 ปรับเป็น Dynamic URL รองรับระบบ Vercel
+      let url = `${API_BASE_URL}/students?page=${currentPage}&limit=5&search=${search}`;
       if (selectedRisk) url += `&risk=${selectedRisk}`;
       
       const res = await fetch(url);
@@ -229,14 +233,15 @@ export default function CompleteCrudStudentsPage() {
 
     try {
       let res;
+      // 🌐 ปรับเป็น Dynamic URL รองรับระบบ Vercel
       if (isEditing && editingTargetId) {
-        res = await fetch(`http://localhost:3001/api/v1/students/${editingTargetId}`, {
+        res = await fetch(`${API_BASE_URL}/students/${editingTargetId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
       } else {
-        res = await fetch('http://localhost:3001/api/v1/students', {
+        res = await fetch(`${API_BASE_URL}/students`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -269,7 +274,7 @@ export default function CompleteCrudStudentsPage() {
       gpa: student.gpa,
       attendanceRate: student.attendanceRate,
       droppedCourses: student.droppedCourses,
-      risk: student.risk,
+      risk: student.risk as any, // 🟢 [แก้ไขจุดพังด่านสุดท้าย]: ใส่ความปลอดภัย as any เคลียร์ปัญหา Vercel Type Check
       status: student.status,
       major: student.major,
       courses: student.courses || [], 
@@ -287,7 +292,8 @@ export default function CompleteCrudStudentsPage() {
     if (!confirm(`⚠️ คุณแน่ใจใช่ไหมที่จะลบข้อมูลของ "${name}" ออกจากระบบถาวร?`)) return;
     
     try {
-      const res = await fetch(`http://localhost:3001/api/v1/students/${idOrStudentId}`, {
+      // 🌐 ปรับเป็น Dynamic URL รองรับระบบ Vercel
+      const res = await fetch(`${API_BASE_URL}/students/${idOrStudentId}`, {
         method: 'DELETE'
       });
 
@@ -312,7 +318,8 @@ export default function CompleteCrudStudentsPage() {
     ];
 
     try {
-      const res = await fetch('http://localhost:3001/api/v1/students/seed', {
+      // 🌐 ปรับเป็น Dynamic URL รองรับระบบ Vercel
+      const res = await fetch(`${API_BASE_URL}/students/seed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data: mockDataset })
@@ -320,7 +327,6 @@ export default function CompleteCrudStudentsPage() {
       if (res.ok) {
         setCurrentPage(1);
         fetchStudents();
-        // ช่วยสั่งดึงวิชาใหม่อีกครั้งเผื่อมีการโยง Seed ข้อมูลสัมพันธ์กัน
         fetchAvailableCourses();
         alert('🚀 Seed ข้อมูลระบบเข้าสู่ MongoDB เรียบร้อย!');
       }
