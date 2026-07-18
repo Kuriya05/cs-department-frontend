@@ -1,26 +1,31 @@
-// src/lib/api.ts
 import axios from 'axios';
 
+// 1. ดึงค่าจาก Environment Variable
+const rawUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+// 2. 🛡️ ป้องกัน Bug: สั่งลบวงเล็บเหลี่ยม [ ] หรือเครื่องหมายคำพูด " ที่อาจหลุดมาจากการตั้งค่า Env ออกให้หมด
+const cleanBaseUrl = rawUrl.replace(/[\[\]"]/g, '').trim();
+
+// 3. สร้าง Instance ของ Axios ด้วย URL ที่ล้างสะอาดแล้ว
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1',
+  baseURL: cleanBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// 🛠️ เพิ่มจุดนี้: Interceptor สำหรับแกะกล่องข้อมูลตัวแสบจาก NestJS ({ data: [...] })
-api.interceptors.response.use(
-  (response) => {
-    // 🟢 ถ้าหลังบ้านส่งของมาเป็น Object ที่มี .data ซ่อนอยู่ข้างใน (เช่น NestJS)
-    // ให้ดึงเอาเฉพาะข้อมูลอาร์เรย์ชั้นในส่งไปให้หน้าเว็บใช้งานทันที
-    if (response.data && response.data.data) {
-      return response.data.data;
+// 4. Request Interceptor: แนบ Token อัตโนมัติในทุกๆ หน้าจอ
+api.interceptors.request.use(
+  (config) => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token');
+      if (token && config.headers) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
-    // ถ้าส่งมาเป็นอาร์เรย์ธรรมดาอยู่แล้ว ก็ส่งกลับไปตามปกติ
-    return response.data;
+    return config;
   },
   (error) => {
-    // ส่ง Error ออกไปจัดการต่อในหน้าเว็บที่มีการเรียกใช้
     return Promise.reject(error);
   }
 );
