@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
 
@@ -111,7 +111,6 @@ const translations = {
     emptyList: 'ไม่พบข้อมูลกลุ่มเสี่ยงในระบบ หรือนักศึกษาทุกคนอยู่ในเกณฑ์ปกติ',
     cardReason: 'ปัจจัยเสี่ยง:',
     cardSuggest: 'AI Strategic Recommendation:',
-    // การแสดงผลข้อความแปลงตามค่า Enum จาก Backend
     High_Reason: 'ตรวจพบสัญญาณวิกฤตสะสม (เกรดลดฮวบ ร่วมกับถอนวิชาแกนหลัก)',
     High_Suggest: '🔴 วิกฤต: ต้องส่งต่อให้อาจารย์ที่ปรึกษาเรียกพบเร่งด่วนภายใน 2 สัปดาห์',
     Medium_Reason: 'มีสัญญาณเตือนระดับปานกลาง (ผลการเรียนตกลง หรือถอนวิชาหลักบางส่วน)',
@@ -169,11 +168,18 @@ export default function RiskPredictionPage() {
 
   const t = translations[lang];
 
+  // 📡 การจัดการ Endpoint API ให้ยืดหยุ่นผ่าน Environment Variables
+  const getApiUrl = useCallback(() => {
+    const envUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+    return envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
+  }, []);
+
   // 1. [READ] ดึงข้อมูลนักศึกษาทั้งหมดจากฐานข้อมูลหลัก
-  const fetchStudentsData = async () => {
+  const fetchStudentsData = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:3001/api/v1/students?limit=100', {
+      const baseUrl = getApiUrl();
+      const res = await fetch(`${baseUrl}/students?limit=100`, {
         headers: { 'Authorization': token ? `Bearer ${token}` : '' }
       });
       if (res.ok) {
@@ -184,11 +190,11 @@ export default function RiskPredictionPage() {
     } catch (error) {
       console.error("Failed to query student database registry:", error);
     }
-  };
+  }, [getApiUrl]);
 
   useEffect(() => {
     fetchStudentsData();
-  }, []);
+  }, [fetchStudentsData]);
 
   // 2. [PATCH] คำนวณความเสี่ยงให้ออกเป็น Enum ตรงตามข้อกำหนด Backend
   const handleSubmit = async (e: React.FormEvent) => {
@@ -223,8 +229,9 @@ export default function RiskPredictionPage() {
 
     try {
       const token = localStorage.getItem('token');
+      const baseUrl = getApiUrl();
       
-      const response = await fetch(`http://localhost:3001/api/v1/students/${targetStudentId}`, {
+      const response = await fetch(`${baseUrl}/students/${targetStudentId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -273,13 +280,17 @@ export default function RiskPredictionPage() {
     if (!confirm('คุณต้องการลบข้อมูลประวัตินักศึกษาคนนี้ออกจากระบบใช่หรือไม่?')) return;
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3001/api/v1/students/${id}`, {
+      const baseUrl = getApiUrl();
+      const response = await fetch(`${baseUrl}/students/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': token ? `Bearer ${token}` : '' }
       });
       if (response.ok) {
         alert("🗑️ ลบข้อมูลนักศึกษาเรียบร้อยแล้ว");
         setStudents(prev => prev.filter(item => item._id !== id));
+        if (editingId === id) {
+          handleCancelEdit();
+        }
       } else {
         alert("❌ ไม่สามารถดำเนินการลบจากระบบได้");
       }
@@ -440,7 +451,7 @@ export default function RiskPredictionPage() {
                   </div>
                 ) : (
                   riskWatchlist.map((student, i) => {
-                    // 🔮 Dynamic Translation Layer mapping via Enum Keys
+                    // 🔮 Dynamic Translation Layer mapping via Enum Keys Safely
                     const riskKey = student.risk || 'None';
                     const dynamicReason = t[`${riskKey}_Reason` as keyof typeof t] || t.None_Reason;
                     const dynamicSuggest = t[`${riskKey}_Suggest` as keyof typeof t] || t.None_Suggest;
@@ -511,6 +522,11 @@ export default function RiskPredictionPage() {
           0% { transform: scale(1) translate(0px, 0px); opacity: 0.12; }
           50% { transform: scale(1.15) translate(20px, -10px); opacity: 0.18; }
           100% { transform: scale(0.95) translate(-10px, 15px); opacity: 0.10; }
+        }
+        @keyframes auroraPulse_reverse {
+          0% { transform: scale(1) translate(0px, 0px); opacity: 0.08; }
+          50% { transform: scale(0.9) translate(-15px, 10px); opacity: 0.14; }
+          100% { transform: scale(1.1) translate(15px, -10px); opacity: 0.06; }
         }
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }

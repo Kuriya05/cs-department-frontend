@@ -4,16 +4,16 @@ import { useState, useEffect, useRef } from 'react';
 import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
 
-// 🎯 ปรับอินเตอร์เฟสให้ตรงตาม MongoDB Schema เป๊ะๆ
+// 🎯 อินเตอร์เฟสตรงตาม MongoDB Schema
 interface Lecturer {
   _id?: string;
   lecturerId: string;
   academicTitle: string;
   name: string;
   email: string;
-  department: string;
-  subjects: string[]; // เปลี่ยนเป็น Array ของ String
-  studentsCount: number; // เปลี่ยนจาก students เป็น studentsCount
+  department: string; 
+  subjects: string[]; 
+  studentsCount: number; 
   workload: number;
   recommend: string;
   status: string;
@@ -94,7 +94,7 @@ function CosmicAuroraGlow({ theme = "dark" }) {
   );
 }
 
-// 🌐 ปรับข้อความแปลภาษาให้รองรับฟิลด์ใหม่ทั้งหมด
+// 🌐 พจนานุกรมแปลภาษา (เพิ่มข้อมูลภาควิชา)
 const translations = {
   TH: {
     hubBadge: 'Executive Intelligence Hub',
@@ -110,6 +110,8 @@ const translations = {
     phName: 'กรอกชื่ออาจารย์...',
     labelEmail: 'อีเมลสถาบัน',
     phEmail: 'ajarn.name@university.ac.th',
+    labelDepartment: 'ภาควิชา / สาขาวิชา',
+    phDepartment: 'เช่น วิทยาการคอมพิวเตอร์',
     labelSubjects: 'รหัสวิชาสอน (คั่นด้วยเครื่องหมาย ,)',
     phSubjects: 'เช่น CS-101, CS-204',
     labelStudents: 'นักศึกษารวมในการดูแล (คน)',
@@ -142,6 +144,8 @@ const translations = {
     phName: 'Enter name...',
     labelEmail: 'Institution Email',
     phEmail: 'ajarn.name@university.ac.th',
+    labelDepartment: 'Department',
+    phDepartment: 'e.g., Computer Science',
     labelSubjects: 'Teaching Modules (Comma separated)',
     phSubjects: 'e.g., CS-101, CS-204',
     labelStudents: 'Total Students Managed',
@@ -167,12 +171,13 @@ export default function LecturersWorkloadPage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [lecturers, setLecturers] = useState<Lecturer[]>([]);
   
-  // ⚙️ เซ็ต State ของฟอร์มใหม่ให้รองรับสเปกจริงของหลังบ้าน
+  // ⚙️ เพิ่มฟิลด์ department ใน State ของ Form
   const [form, setForm] = useState({ 
     lecturerId: '', 
     academicTitle: 'อาจารย์', 
     name: '', 
     email: '', 
+    department: '', 
     subjects: '', 
     studentsCount: '', 
     status: 'Active' 
@@ -183,7 +188,7 @@ export default function LecturersWorkloadPage() {
 
   const t = translations[lang];
 
-  // 📖 READ (ดึงข้อมูล) - 🟢 เปลี่ยนไปใช้ IP 127.0.0.1 ตรงๆ
+  // 📖 READ (ดึงข้อมูลผ่าน Local IP)
   const fetchWorkloadHistory = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -207,10 +212,10 @@ export default function LecturersWorkloadPage() {
     fetchWorkloadHistory();
   }, []);
 
-  // ➕ CREATE & ✏️ UPDATE - 🟢 เปลี่ยนไปใช้ IP 127.0.0.1 ตรงๆ
+  // ➕ CREATE & ✏️ UPDATE (รวมส่งฟิลด์ department)
   const handleCalculateWorkload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.lecturerId || !form.name || !form.email || isLoading) return;
+    if (!form.lecturerId || !form.name || !form.email || !form.department || isLoading) return;
 
     setIsLoading(true);
 
@@ -223,6 +228,7 @@ export default function LecturersWorkloadPage() {
       academicTitle: form.academicTitle,
       name: form.name,
       email: form.email,
+      department: form.department,
       subjects: subjectsArray, 
       studentsCount: Number(form.studentsCount) || 0, 
       status: form.status
@@ -272,7 +278,7 @@ export default function LecturersWorkloadPage() {
     }
   };
 
-  // ⚙️ PREPARE EDIT
+  // ⚙️ PREPARE EDIT (ดึงค่า department มาใส่ในฟอร์มแก้ไข)
   const startEditLecturer = (lecturer: Lecturer) => {
     if (!lecturer._id) return;
     setEditingId(lecturer._id);
@@ -281,13 +287,14 @@ export default function LecturersWorkloadPage() {
       academicTitle: lecturer.academicTitle,
       name: lecturer.name,
       email: lecturer.email,
+      department: lecturer.department || '',
       subjects: Array.isArray(lecturer.subjects) ? lecturer.subjects.join(', ') : '',
-      studentsCount: lecturer.studentsCount.toString(),
+      studentsCount: (lecturer.studentsCount ?? 0).toString(),
       status: lecturer.status
     });
   };
 
-  // 🗑️ DELETE - 🟢 เปลี่ยนไปใช้ IP 127.0.0.1 ตรงๆ
+  // 🗑️ DELETE
   const handleDeleteLecturer = async (id: string | undefined) => {
     if (!id || isLoading) return;
     if (!window.confirm(t.confirmDelete)) return;
@@ -318,6 +325,7 @@ export default function LecturersWorkloadPage() {
       academicTitle: 'อาจารย์', 
       name: '', 
       email: '', 
+      department: '',
       subjects: '', 
       studentsCount: '', 
       status: 'Active' 
@@ -381,6 +389,7 @@ export default function LecturersWorkloadPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start transform-gpu">
+              {/* ฟอร์มกรอกข้อมูลคณาจารย์ */}
               <form 
                 onSubmit={handleCalculateWorkload} 
                 className={`p-5 rounded-xl border backdrop-blur-md space-y-4 shadow-[0_10px_30px_rgba(0,0,0,0.03)] transition-all duration-500 animate-[slideUp_0.5s_ease-out_0.2s_both] text-xs ${theme === 'dark' ? 'bg-zinc-950/40 border-zinc-900/60' : 'bg-white/70 border-zinc-200'} ${editingId ? 'ring-1 ring-cyan-500/50' : ''}`}
@@ -441,6 +450,20 @@ export default function LecturersWorkloadPage() {
                   />
                 </div>
 
+                {/* 🆕 เพิ่มฟิลด์กรอกข้อมูลภาควิชาลงใน UI ฟอร์ม */}
+                <div className="space-y-1">
+                  <label className={`text-[10px] font-mono font-bold uppercase tracking-wider block transition-colors duration-500 ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}`}>{t.labelDepartment}</label>
+                  <input 
+                    type="text" 
+                    value={form.department} 
+                    onChange={e => setForm({...form, department: e.target.value})} 
+                    className={`w-full border p-2.5 rounded-xl text-xs transition-all duration-300 focus:outline-none focus:ring-1 ${theme === 'dark' ? 'bg-black border-zinc-800 text-white focus:border-cyan-500 focus:ring-cyan-500/30' : 'bg-zinc-50 border-zinc-200 text-zinc-800 focus:border-cyan-500 focus:ring-cyan-500/20'}`}
+                    placeholder={t.phDepartment} 
+                    required 
+                    disabled={isLoading}
+                  />
+                </div>
+
                 <div className="space-y-1">
                   <label className={`text-[10px] font-mono font-bold uppercase tracking-wider block transition-colors duration-500 ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}`}>{t.labelSubjects}</label>
                   <input 
@@ -457,6 +480,7 @@ export default function LecturersWorkloadPage() {
                   <label className={`text-[10px] font-mono font-bold uppercase tracking-wider block transition-colors duration-500 ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}`}>{t.labelStudents}</label>
                   <input 
                     type="number" 
+                    min="0"
                     value={form.studentsCount} 
                     onChange={e => setForm({...form, studentsCount: e.target.value})} 
                     className={`w-full border p-2.5 rounded-xl text-xs transition-all duration-300 focus:outline-none focus:ring-1 ${theme === 'dark' ? 'bg-black border-zinc-800 text-white focus:border-cyan-500 focus:ring-cyan-500/30' : 'bg-zinc-50 border-zinc-200 text-zinc-800 focus:border-cyan-500 focus:ring-cyan-500/20'}`}
@@ -499,6 +523,7 @@ export default function LecturersWorkloadPage() {
                 </div>
               </form>
 
+              {/* ส่วนแสดงประวัติข้อมูลภาระงาน */}
               <div className="lg:col-span-2 space-y-4 animate-[slideUp_0.5s_ease-out_0.3s_both]">
                 <h3 className={`text-[10px] font-mono font-bold uppercase tracking-wider transition-colors duration-500 ${theme === 'dark' ? 'text-cyan-400/80' : 'text-cyan-700'}`}>
                   {t.historyHeader}
@@ -523,7 +548,10 @@ export default function LecturersWorkloadPage() {
                           <div className={`font-serif text-base font-normal transition-colors duration-500 ${theme === 'dark' ? 'text-zinc-100' : 'text-zinc-900'}`}>
                             {l.academicTitle} {l.name}
                           </div>
-                          <div className={`text-[11px] font-mono text-zinc-500`}>{l.email}</div>
+                          {/* 🆕 แสดงผลข้อมูลภาควิชาควบคู่กับอีเมล */}
+                          <div className={`text-[11px] font-mono text-zinc-500`}>
+                            {l.department || 'N/A'} • {l.email}
+                          </div>
                           
                           <div className={`flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-mono ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>
                             <span>วิชาสอน: <strong className={theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'}>{l.subjects ? l.subjects.length : 0}</strong> วิชา ({l.subjects ? l.subjects.join(', ') : 'ไม่มี'})</span>
@@ -534,9 +562,9 @@ export default function LecturersWorkloadPage() {
                         <div className="text-left md:text-right flex flex-col items-start md:items-end gap-1.5 min-w-[200px]">
                           <div className="flex items-center gap-2 w-full md:justify-end">
                             <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded-lg border transition-all duration-500 ${
-                              l.workload >= 85 
+                              (l.workload || 0) >= 85 
                                 ? 'bg-red-500/10 text-red-400 border-red-500/20' 
-                                : l.workload >= 60 
+                                : (l.workload || 0) >= 60 
                                   ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                                   : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                             }`}>

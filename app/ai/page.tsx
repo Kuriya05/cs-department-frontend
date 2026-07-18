@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
 
@@ -108,7 +108,7 @@ const translations = {
     matchScore: 'ระดับความแมตช์เชิงความรู้',
     roadmapTitle: '🗺️ แผนผังลำดับการลงทะเบียนเรียนที่แนะนำ (Learning Trajectory Line)',
     errorTitle: '❌ ระบบตรวจพบข้อผิดพลาด (Connection Refused)',
-    errorDesc: 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์หลักได้ (API: localhost:3001) โปรดตรวจสอบให้แน่ใจว่าได้เปิดระบบ Backend ไว้แล้ว หรือตรวจสอบ Network ใน Console'
+    errorDesc: 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์หลักได้ โปรดตรวจสอบให้แน่ใจว่าได้เปิดระบบ Backend ไว้แล้ว หรือตรวจสอบ Network ใน Console'
   },
   EN: {
     hubBadge: 'AI Neural Matrix Engine v2.6',
@@ -127,7 +127,7 @@ const translations = {
     matchScore: 'AI Synergy Match Score',
     roadmapTitle: '🗺️ Curated Learning Trajectory Pipeline (Roadmap View)',
     errorTitle: '❌ Core Connection Failure (Refused)',
-    errorDesc: 'Unable to establish data pipeline with the AI suggestion matrix (API: localhost:3001). Please verify your backend server instance state.'
+    errorDesc: 'Unable to establish data pipeline with the AI suggestion matrix. Please verify your backend server instance state.'
   }
 };
 
@@ -207,18 +207,22 @@ export default function CourseRecommendPage() {
   
   const [currentStageText, setCurrentStageText] = useState('');
   const [matchScorePercent, setMatchScorePercent] = useState(85);
-  
-  // 🗂️ Category State
   const [activeCategory, setActiveCategory] = useState('all');
 
   const t = translations[lang];
+
+  // 📡 ฟังก์ชันจัดการ URL ของ API ป้องกันเครื่องหมาย Slash ซ้ำซ้อน
+  const getApiBaseUrl = useCallback(() => {
+    const envUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+    return envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
+  }, []);
 
   // Filter Presets based on active tab
   const filteredPresets = EXTENDED_PRESETS.filter(
     p => activeCategory === 'all' || p.category === activeCategory
   );
 
-  const runAILoadingIllusion = () => {
+  const runAILoadingIllusion = useCallback(() => {
     let stageIndex = 0;
     setCurrentStageText(AI_LOADING_STAGES[0]);
     
@@ -232,15 +236,14 @@ export default function CourseRecommendPage() {
     }, 700);
 
     return () => clearInterval(interval);
-  };
+  }, []);
 
   // ==========================================
   // 🧠 LOCAL INTELLIGENT COGNITIVE BRAIN (FALLBACK)
   // ==========================================
-  const generateSmartLocalResponse = (inputGoal: string): RecommendationResult => {
+  const generateSmartLocalResponse = useCallback((inputGoal: string): RecommendationResult => {
     const text = inputGoal.toLowerCase();
     
-    // Pattern 1: เกรด A / วิชาง่าย
     if (text.includes('เกรด') || text.includes('ง่าย') || text.includes('grade') || text.includes('easy')) {
       return {
         careerGoal: inputGoal,
@@ -254,7 +257,6 @@ export default function CourseRecommendPage() {
       };
     }
 
-    // Pattern 2: AI / Data / โมเดล
     if (text.includes('ai') || text.includes('data') || text.includes('machine') || text.includes('หุ่นยนต์') || text.includes('หุ้น')) {
       return {
         careerGoal: inputGoal,
@@ -268,7 +270,6 @@ export default function CourseRecommendPage() {
       };
     }
 
-    // Pattern 3: Cyber / Security / บล็อกเชน / ปลอดภัย
     if (text.includes('cyber') || text.includes('security') || text.includes('ปลอดภัย') || text.includes('ล่า') || text.includes('blockchain')) {
       return {
         careerGoal: inputGoal,
@@ -282,7 +283,6 @@ export default function CourseRecommendPage() {
       };
     }
 
-    // Pattern 4: เกม / กราฟิก / หน้าบ้าน / creative
     if (text.includes('game') || text.includes('เกม') || text.includes('creative') || text.includes('frontend') || text.includes('ui')) {
       return {
         careerGoal: inputGoal,
@@ -296,7 +296,6 @@ export default function CourseRecommendPage() {
       };
     }
 
-    // Pattern 5: ธุรกิจ / อนาคต / โค้ดน้อย / ผู้ประกอบการ / ฟรีแลนซ์
     if (text.includes('ธุรกิจ') || text.includes('อนาคต') || text.includes('โค้ด') || text.includes('entrepreneur') || text.includes('freelance') || text.includes('product')) {
       return {
         careerGoal: inputGoal,
@@ -310,7 +309,6 @@ export default function CourseRecommendPage() {
       };
     }
 
-    // Default Fallback (คำถามทั่วไป/ฉลาดๆ นอกกรอบอื่นๆ)
     return {
       careerGoal: inputGoal,
       recommendCourses: [
@@ -322,31 +320,9 @@ export default function CourseRecommendPage() {
         ? `[Smart Local Cognitive Engine]: ระบบตรวจพบคำถามนอกกรอบแบบพิเศษของคุณในหัวข้อ "${inputGoal}" จึงได้จัดวางแผนผังวิชาเลือกแกนหลักแบบสามประสาน (Full-Stack + AI Reasoning + Cloud Operations) ชุดวิชานี้คือเกราะกำบังสารพัดประโยชน์ที่จะทำให้คุณยืดหยุ่นพอที่จะกระโดดเข้าหาเทรนด์เทคโนโลยีแบบใดก็ได้ในโลกไอทีอนาคต!`
         : `[Smart Local Cognitive Engine]: Detected custom query "${inputGoal}". The internal brain has calculated a holistic triple-threat trajectory (Fullstack Architecture + Intelligent AI Core + Resilient Cloud Operations) to ensure maximum technical adaptiveness.`
     };
-  };
+  }, [lang]);
 
-  const fetchSavedRecommendation = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:3001/api/v1/recommendations/my-history', {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.length > 0) {
-          setResult(data[0]);
-          setMatchScorePercent(Math.floor(Math.random() * (99 - 88 + 1)) + 88);
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching history:', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchSavedRecommendation();
-  }, []);
-
-  const triggerAnalysis = async (targetGoal: string) => {
+  const triggerAnalysis = useCallback(async (targetGoal: string) => {
     if (!targetGoal.trim()) return;
     setLoading(true);
     setError(null);
@@ -355,7 +331,8 @@ export default function CourseRecommendPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:3001/api/v1/recommendations/suggest', {
+      const apiPath = getApiBaseUrl();
+      const res = await fetch(`${apiPath}/recommendations/suggest`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -371,7 +348,6 @@ export default function CourseRecommendPage() {
         setMatchScorePercent(Math.floor(Math.random() * (98 - 86 + 1)) + 86); 
         setGoal('');
       } else {
-        // 🧠 [ดักจับความฉลาด] ถ้าหลังบ้านพัง (เช่น โควตาเต็ม รหัส 500 หรือ 429) ให้ใช้สมองกลส่วนท้องถิ่นแทนทันที!
         console.warn('Backend returned an error. Switching seamlessly to Local Cognitive Engine...');
         await new Promise((resolve) => setTimeout(resolve, 2000));
         const smartLocalData = generateSmartLocalResponse(targetGoal);
@@ -379,9 +355,8 @@ export default function CourseRecommendPage() {
         setMatchScorePercent(Math.floor(Math.random() * (97 - 90 + 1)) + 90);
         setGoal('');
       }
-    } catch (err: any) {
-      // 🧠 [ดักจับความฉลาด] ถ้าเน็ตหลุด/เชื่อมต่อไม่ได้เลย ก็สลับมาเล่นแผนบีทันที งานไม่มีสะดุด
-      console.warn('Network failure. Deploying Local Cognitive Engine...');
+    } catch (err) {
+      console.warn('Network failure. Deploying Local Cognitive Engine:', err);
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const smartLocalData = generateSmartLocalResponse(targetGoal);
       setResult(smartLocalData);
@@ -391,7 +366,33 @@ export default function CourseRecommendPage() {
       setLoading(false);
       cleanupIllusion();
     }
-  };
+  }, [getApiBaseUrl, runAILoadingIllusion, generateSmartLocalResponse]);
+
+  // Hook จัดการดึงข้อมูลประวัติในฐานข้อมูลเมื่อเมาท์คอมโพเนนต์
+  useEffect(() => {
+    let isMounted = true;
+    const fetchSavedRecommendation = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const apiPath = getApiBaseUrl();
+        const res = await fetch(`${apiPath}/recommendations/my-history`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          if (data && data.length > 0) {
+            setResult(data[0]);
+            setMatchScorePercent(Math.floor(Math.random() * (99 - 88 + 1)) + 88);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching history:', err);
+      }
+    };
+
+    fetchSavedRecommendation();
+    return () => { isMounted = false; };
+  }, [getApiBaseUrl]);
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -474,6 +475,7 @@ export default function CourseRecommendPage() {
                   {PRESET_CATEGORIES.map((cat) => (
                     <button
                       key={cat.id}
+                      type="button"
                       onClick={() => setActiveCategory(cat.id)}
                       className={`text-[10px] font-mono px-3 py-1.5 rounded-lg transition-all cursor-pointer border ${
                         activeCategory === cat.id 
@@ -492,7 +494,7 @@ export default function CourseRecommendPage() {
                     const presetText = lang === 'TH' ? preset.th : preset.en;
                     return (
                       <button
-                        key={index}
+                        key={`preset-${preset.category}-${index}`}
                         type="button"
                         onClick={() => { setGoal(presetText); triggerAnalysis(presetText); }}
                         disabled={loading}
@@ -588,7 +590,7 @@ export default function CourseRecommendPage() {
                       </div>
                     ) : (
                       result.recommendCourses.map((course, idx) => (
-                        <div key={idx} className="relative group">
+                        <div key={`course-${course.courseCode}-${idx}`} className="relative group">
                           <span className="absolute -left-[31px] top-3 w-4 h-4 rounded-full bg-black border-2 border-cyan-500 shadow-[0_0_8px_rgba(34,211,238,0.5)] flex items-center justify-center text-[8px] font-mono text-cyan-400 scale-90 group-hover:scale-110 transition-transform">
                             {idx + 1}
                           </span>

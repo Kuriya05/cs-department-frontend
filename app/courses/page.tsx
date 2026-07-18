@@ -145,18 +145,21 @@ export default function AcademicAnalyticsPage() {
       const headers: HeadersInit = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      // 1. ดึงข้อมูลรายชื่อนักศึกษาทั้งหมดจาก Core Database
-      const studentsRes = await fetch('http://localhost:3001/api/v1/students', { headers });
+      // 🎯 ดึงลิงก์ API หลักจาก Environment Variables (ถ้าไม่มีให้โยงกลับเครื่องเป็น Fallback)
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+
+      // 1. ดึงข้อมูลรายชื่อนักศึกษาทั้งหมดจาก Core Database (ปรับมาใช้ API_URL)
+      const studentsRes = await fetch(`${API_URL}/students`, { headers });
       let allStudents = [];
       if (studentsRes.ok) {
         const payload = await studentsRes.json();
         allStudents = Array.isArray(payload) ? payload : payload.data || [];
       }
 
-      // 2. ดึงข้อมูลประวัติความเสี่ยงที่บันทึกไว้
+      // 2. ดึงข้อมูลประวัติความเสี่ยงที่บันทึกไว้ (ปรับพาร์ทให้เข้ากับโครงสร้าง /api/v1/students)
       let riskRecords = [];
       try {
-        const riskRes = await fetch('http://localhost:3001/api/students/risk-all', { headers });
+        const riskRes = await fetch(`${API_URL}/students/risk-all`, { headers });
         if (riskRes.ok) riskRecords = await riskRes.json();
       } catch (e) {
         console.warn("Could not fetch explicit risk logs, falling back to profile telemetry.");
@@ -184,10 +187,10 @@ export default function AcademicAnalyticsPage() {
         if (rec.missingJobs === 'yes') missingJobsCount++;
       });
 
-      // 4. คำนวณอัตราส่วนเปอร์เซ็นต์จริง (ป้องกันกรณีไม่มีนักศึกษาในระบบป้องกันการหารด้วยศูนย์)
+      // 4. คำนวณอัตราส่วนเปอร์เซ็นต์จริง
       const calculatedDropRate = totalStudentsCount > 0 
         ? Math.min(Math.round((withdrewCount / Math.max(totalStudentsCount, 1)) * 100), 100)
-        : 38; // Default value fallback if DB is pristine empty
+        : 38; 
 
       // 5. ประกอบร่างข้อความ AI ให้ Dynamic ตามสภาวะของข้อมูล Students ณ เวลานั้น
       const activeRiskSum = withdrewCount + criticalGpaCount + missingJobsCount;
@@ -232,14 +235,14 @@ export default function AcademicAnalyticsPage() {
   // 🔄 1. Hook: Auto Initialization
   useEffect(() => {
     handleFetchAnalytics();
-  }, [lang]); // ทำการรีเฟรชภาษาเมื่อมีการกดสลับตัวเลือก
+  }, [lang]); 
 
   // 🔁 2. Hook: Live Polling Loop 
   useEffect(() => {
     if (!liveMode) return;
     const interval = setInterval(() => {
       handleFetchAnalytics(true);
-    }, 4000); // วิ่งเข้าไปดึงและคำนวณใหม่ทุกๆ 4 วินาทีสอดคล้องกับ Live Engine
+    }, 4000); 
     return () => clearInterval(interval);
   }, [liveMode, lang]);
 
