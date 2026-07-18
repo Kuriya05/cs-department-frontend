@@ -1,9 +1,11 @@
 // app/services/api.ts
 import axios, { InternalAxiosRequestConfig } from 'axios';
 
-// 🌐 1. เชื่อมต่อไปยังหลังบ้าน NestJS (พอร์ต 3001)
+// 🌐 1. เชื่อมต่อไปยังหลังบ้าน (ใช้ลิงก์ Vercel ถ้ามี ถ้าไม่มีให้ดีดกลับไปใช้ localhost พอร์ต 3001)
 const api = axios.create({
-  baseURL: 'http://localhost:3001/api/v1',
+  baseURL: process.env.NEXT_PUBLIC_API_URL
+    ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1`
+    : 'http://localhost:3001/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
