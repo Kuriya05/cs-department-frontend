@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
-// 🟢 เปลี่ยนมาใช้ Relative Path ที่ชัวร์ที่สุดตามโครงสร้างโฟลเดอร์ของคุณ
-import api from '../../lib/api'; 
+// 🟢 ใช้ Relative Path ตัวกลางจัดการ Token และ Base URL
+import api from '@/lib/api';
 
 // ==========================================
 // ❄️ AMBIENT COMPONENT: Diamond Dust Background
@@ -199,11 +199,11 @@ export default function DashboardPage() {
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      // 🟢 เปลี่ยนมาใช้ตัวกลาง api.get ยิงเข้าหา Render ชนะแน่นอน 100%
-      const serverStats: any = await api.get('/students/dashboard/analytics', { headers });
+      // 🛠️ จุดแก้ไขที่ 1: เติม /api/v1 นำหน้า เพื่อกันข้อผิดพลาด 404 บนเซิร์ฟเวอร์หลัก
+      const response: any = await api.get('/api/v1/students/dashboard/analytics', { headers });
+      const serverStats = response.data || response;
       
       if (serverStats) {
-        // แกะและหลอมรวมข้อมูลระดับความเสี่ยงย่อยให้กลายเป็นผลรวมสะสม
         const highRisk = serverStats.riskDistribution?.High ?? 0;
         const medRisk = serverStats.riskDistribution?.Medium ?? 0;
         const lowRisk = serverStats.riskDistribution?.Low ?? 0;
@@ -239,7 +239,6 @@ export default function DashboardPage() {
     }
   };
 
-  // 🔄 ทำระบบ Real-time Polling สั่งดึงค่าจาก MongoDB มาอัปเดตอัตโนมัติทุกๆ 5 วินาที
   useEffect(() => {
     fetchRealDashboardStats(); 
 
@@ -259,7 +258,6 @@ export default function DashboardPage() {
 
     let aiReply = '';
 
-    // รวบรวมข้อมูลสดจากทุกโมดูลเพื่อป้อนเป็น Context ให้กับฐานข้อมูล AI Chat
     const globalContextPayload = {
       message: messageText,
       siteContext: {
@@ -284,8 +282,9 @@ export default function DashboardPage() {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      // 🟢 ล้างบางจุดบกพร่องชิ้นโต! เปลี่ยนมาใช้ตัวกลาง api.post ยิงไปหาตัวจัดการแชทบน Render แทนการใช้ localhost
-      const data: any = await api.post('/chat/query', globalContextPayload, { headers });
+      // 🛠️ จุดแก้ไขที่ 2: เติม /api/v1 เพื่อเรียกใช้ระบบ AI Query Agent บนระบบ Backend ให้ถูกต้อง
+      const response: any = await api.post('/api/v1/chat/query', globalContextPayload, { headers });
+      const data = response.data || response;
 
       if (data) {
         if (data.reply) {
@@ -298,7 +297,6 @@ export default function DashboardPage() {
       console.warn("Backend dynamic query failed, routing to Context-Aware Client Analyzer.");
     }
 
-    // 🛡️ ปรับปรุงระบบวิเคราะห์ฝั่งคลื่นวิทยุโลคอล (Client Fallback) ให้ตอบโดยอิงตามตัวแปรสดข้ามหน้าจอแบบ Dynamic
     if (!aiReply) {
       const lowerText = messageText.toLowerCase();
       if (lowerText.includes('2569') || lowerText.includes('ai') || lowerText.includes('2026')) {
