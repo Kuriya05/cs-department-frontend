@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Sidebar from '../../components/Sidebar';
 import Navbar from '../../components/Navbar';
-// 🔌 นำเข้า api instance ตัวกลาง (ปรับ Path ถอยหลังให้ตรงตามโครงสร้างโฟลเดอร์ของคุณ)
+// 🔌 นำเข้า api instance ตัวกลาง
 import api from '@/lib/api';
 
 // ==========================================
@@ -127,7 +127,7 @@ export default function CrudCoursesByYearPage() {
     fetchCourses();
   }, []);
 
-  // 💾 [CREATE & UPDATE] ส่งข้อมูลผ่าน Instance ตัวกลาง
+  // 💾 [CREATE & UPDATE] ส่งข้อมูลผ่าน Instance ตัวกลาง พร้อมระบบดัก Error ที่เสถียรขึ้น
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.courseCode || !formData.courseName || !formData.teacher) {
@@ -146,25 +146,20 @@ export default function CrudCoursesByYearPage() {
     };
 
     try {
-      let res;
       if (isEditing && editingTargetId) {
-        res = await api.patch(`/api/v1/courses/${editingTargetId}`, payload);
+        await api.patch(`/api/v1/courses/${editingTargetId}`, payload);
+        alert('🔄 อัปเดตข้อมูลรายวิชาสำเร็จ!');
       } else {
-        res = await api.post('/api/v1/courses', payload);
+        await api.post('/api/v1/courses', payload);
+        alert('🎯 เพิ่มรายวิชาเข้าคลังแผนการศึกษาสำเร็จ!');
       }
-
-      if (res.status === 200 || res.status === 201) {
-        alert(isEditing ? '🔄 อัปเดตข้อมูลรายวิชาสำเร็จ!' : '🎯 เพิ่มรายวิชาเข้าคลังแผนการศึกษาสำเร็จ!');
-        handleCancelEdit();
-        fetchCourses();
-      } else {
-        const err = res.data;
-        alert(`⛔ [ข้อผิดพลาดจากเซิร์ฟเวอร์]: ${Array.isArray(err.message) ? err.message.join(', ') : err.message}`);
-      }
+      handleCancelEdit();
+      fetchCourses();
     } catch (err: any) {
-      const errMsg = err.response?.data?.message;
-      alert(`เกิดปัญหาเครือข่ายในการส่งข้อมูลวิชา: ${Array.isArray(errMsg) ? errMsg.join(', ') : errMsg || err.message}`);
-    } finally {
+      // ดึงข้อความ Error จาก NestJS Validation DTO (รองรับทั้งแบบ String และ Array)
+      const errMsg = err.response?.data?.message || err.message;
+      alert(`⛔ [ข้อผิดพลาดจากเซิร์ฟเวอร์]: ${Array.isArray(errMsg) ? errMsg.join(', ') : errMsg}`);
+    } {
       setIsLoading(false);
     }
   };
@@ -195,19 +190,18 @@ export default function CrudCoursesByYearPage() {
     if (!confirm(`⚠️ ยืนยันที่จะลบวิชา "${code}" ออกจากฐานข้อมูลคลังหลัก?`)) return;
 
     try {
-      const res = await api.delete(`/api/v1/courses/${courseId}`);
-      if (res.status === 200 || res.status === 204) {
-        alert('❌ ลบวิชาออกจากระบบสำเร็จ');
-        if (editingTargetId === courseId) handleCancelEdit();
-        fetchCourses();
-      }
+      await api.delete(`/api/v1/courses/${courseId}`);
+      alert('❌ ลบวิชาออกจากระบบสำเร็จ');
+      if (editingTargetId === courseId) handleCancelEdit();
+      fetchCourses();
     } catch (err: any) {
       console.error(err);
-      alert('ไม่สามารถลบข้อมูลรายวิชาได้ในขณะนี้');
+      const errMsg = err.response?.data?.message || err.message;
+      alert(`ไม่สามารถลบข้อมูลรายวิชาได้: ${Array.isArray(errMsg) ? errMsg.join(', ') : errMsg}`);
     }
   };
 
-  // 🚀 [SEED] ส่งข้อมูลจำลองผ่าน Instance ตัวกลาง
+  // 🚀 [SEED] ส่งข้อมูลจำลองแบบ Parallel ป้องกันเซสชันค้างและดักจับ Error รายตัวได้ดีขึ้น
   const handleSeedCourses = async () => {
     setIsLoading(true);
     const mockCourses = [
@@ -218,14 +212,14 @@ export default function CrudCoursesByYearPage() {
     ];
 
     try {
-      for (const course of mockCourses) {
-        await api.post('/api/v1/courses', course);
-      }
-      fetchCourses();
+      // ใช้ Promise.all ยิงข้อมูลพร้อมกัน เพิ่มความเร็วในการทำงาน
+      await Promise.all(mockCourses.map(course => api.post('/api/v1/courses', course)));
+      await fetchCourses();
       alert('🚀 Seed ข้อมูลรายวิชาคอมพิวเตอร์ตามข้อกำหนด DTO ใหม่สำเร็จ!');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('เกิดข้อผิดพลาดระหว่างการ Seed ข้อมูล');
+      const errMsg = err.response?.data?.message || err.message;
+      alert(`เกิดข้อผิดพลาดระหว่างการ Seed ข้อมูล: ${Array.isArray(errMsg) ? errMsg.join(', ') : errMsg}`);
     } finally {
       setIsLoading(false);
     }
@@ -256,6 +250,7 @@ export default function CrudCoursesByYearPage() {
 
           <div className="px-8 pt-4 flex justify-end gap-3 z-20 animate-[slideDown_0.5s_ease-out_both]">
             <button 
+              type="button"
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               className={`p-2.5 rounded-xl border backdrop-blur-md cursor-pointer transition-all duration-500 hover:scale-105 active:scale-95 shadow-sm ${theme === 'dark' ? 'bg-zinc-950/60 border-zinc-900 text-emerald-400' : 'bg-white/80 border-zinc-200 text-emerald-600'}`}
             >
@@ -275,6 +270,7 @@ export default function CrudCoursesByYearPage() {
               <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Course Database Engine Active • ตรวจพบสารสนเทศหลักสูตรทั้งหมด {filteredCourses.length} วิชา</p>
             </div>
             <button 
+              type="button"
               onClick={handleSeedCourses}
               disabled={isLoading}
               className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-mono text-xs tracking-wider rounded-xl cursor-pointer hover:scale-105 transition-all shadow-md active:scale-95 disabled:opacity-40"
@@ -293,11 +289,11 @@ export default function CrudCoursesByYearPage() {
             />
             
             <div className={`flex border rounded-xl p-1 backdrop-blur-sm ${theme === 'dark' ? 'bg-zinc-950/40 border-zinc-800' : 'bg-white/80 border-zinc-200'}`}>
-              <button onClick={() => setSelectedYearFilter('')} className={`px-3 py-1.5 rounded-lg transition-colors ${selectedYearFilter === '' ? 'bg-emerald-500 text-black font-bold' : 'text-zinc-400 hover:text-emerald-400'}`}>ทุกชั้นปี</button>
-              <button onClick={() => setSelectedYearFilter('1')} className={`px-3 py-1.5 rounded-lg transition-colors ${selectedYearFilter === '1' ? 'bg-emerald-500 text-black font-bold' : 'text-zinc-400 hover:text-emerald-400'}`}>ปี 1</button>
-              <button onClick={() => setSelectedYearFilter('2')} className={`px-3 py-1.5 rounded-lg transition-colors ${selectedYearFilter === '2' ? 'bg-emerald-500 text-black font-bold' : 'text-zinc-400 hover:text-emerald-400'}`}>ปี 2</button>
-              <button onClick={() => setSelectedYearFilter('3')} className={`px-3 py-1.5 rounded-lg transition-colors ${selectedYearFilter === '3' ? 'bg-emerald-500 text-black font-bold' : 'text-zinc-400 hover:text-emerald-400'}`}>ปี 3</button>
-              <button onClick={() => setSelectedYearFilter('4')} className={`px-3 py-1.5 rounded-lg transition-colors ${selectedYearFilter === '4' ? 'bg-emerald-500 text-black font-bold' : 'text-zinc-400 hover:text-emerald-400'}`}>ปี 4</button>
+              <button type="button" onClick={() => setSelectedYearFilter('')} className={`px-3 py-1.5 rounded-lg transition-colors ${selectedYearFilter === '' ? 'bg-emerald-500 text-black font-bold' : 'text-zinc-400 hover:text-emerald-400'}`}>ทุกชั้นปี</button>
+              <button type="button" onClick={() => setSelectedYearFilter('1')} className={`px-3 py-1.5 rounded-lg transition-colors ${selectedYearFilter === '1' ? 'bg-emerald-500 text-black font-bold' : 'text-zinc-400 hover:text-emerald-400'}`}>ปี 1</button>
+              <button type="button" onClick={() => setSelectedYearFilter('2')} className={`px-3 py-1.5 rounded-lg transition-colors ${selectedYearFilter === '2' ? 'bg-emerald-500 text-black font-bold' : 'text-zinc-400 hover:text-emerald-400'}`}>ปี 2</button>
+              <button type="button" onClick={() => setSelectedYearFilter('3')} className={`px-3 py-1.5 rounded-lg transition-colors ${selectedYearFilter === '3' ? 'bg-emerald-500 text-black font-bold' : 'text-zinc-400 hover:text-emerald-400'}`}>ปี 3</button>
+              <button type="button" onClick={() => setSelectedYearFilter('4')} className={`px-3 py-1.5 rounded-lg transition-colors ${selectedYearFilter === '4' ? 'bg-emerald-500 text-black font-bold' : 'text-zinc-400 hover:text-emerald-400'}`}>ปี 4</button>
             </div>
           </div>
 
@@ -320,7 +316,7 @@ export default function CrudCoursesByYearPage() {
                 <div className="grid grid-cols-3 gap-2">
                   <div className="col-span-1">
                     <label className="text-zinc-400 block mb-0.5">รหัสวิชา</label>
-                    <input required type="text" value={formData.courseCode} onChange={e => setFormData({...formData, courseCode: e.target.value})} className={`w-full bg-transparent border rounded-lg p-2 transition-colors ${theme === 'dark' ? 'border-zinc-800 text-zinc-200 focus:border-emerald-500' : 'border-zinc-300 text-zinc-800 focus:border-emerald-600'}`} placeholder="เช่น CS204" />
+                    <input required type="text" value={formData.courseCode} onChange={e => setFormData({...formData, courseCode: e.target.value})} className={`w-full bg-transparent border rounded-lg p-2 transition-colors ${theme === 'dark' ? 'border-zinc-800 text-zinc-2200 focus:border-emerald-500' : 'border-zinc-300 text-zinc-800 focus:border-emerald-600'}`} placeholder="เช่น CS204" />
                   </div>
                   <div className="col-span-2">
                     <label className="text-zinc-400 block mb-0.5">ชื่อรายวิชา</label>
@@ -340,7 +336,7 @@ export default function CrudCoursesByYearPage() {
                 </div>
 
                 <div>
-                  <label className="text-zinc-400 block mb-0.5">ระบุชั้นปี / ภาคการศึกษา (Semester String)</label>
+                  <label className="text-zinc-400 block mb-0.5">ระบุชั้นปี / ภาคการศึกษา</label>
                   <select value={formData.semester} onChange={e => setFormData({...formData, semester: e.target.value})} className={`w-full border rounded-lg p-2 ${theme === 'dark' ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-300 text-zinc-800'}`}>
                     <option value="ปี 1 ภาคเรียนที่ 1">ชั้นปี 1 - ภาคเรียนที่ 1</option>
                     <option value="ปี 1 ภาคเรียนที่ 2">ชั้นปี 1 - ภาคเรียนที่ 2</option>
@@ -383,8 +379,8 @@ export default function CrudCoursesByYearPage() {
                         <td colSpan={5} className="text-center p-8 text-zinc-500 italic">ไม่พบข้อมูลรายวิชาในกลุ่มโครงสร้างที่เลือก กรุณาเปลี่ยนฟิลเตอร์หรือกดปุ่ม SEED ข้อมูลด้านบน</td>
                       </tr>
                     ) : (
-                      filteredCourses.map((course) => (
-                        <tr key={course._id} className={`border-b hover:bg-emerald-500/[0.01] transition-colors ${theme === 'dark' ? 'border-zinc-900/40' : 'border-zinc-200/60'}`}>
+                      filteredCourses.map((course, index) => (
+                        <tr key={course._id || index} className={`border-b hover:bg-emerald-500/[0.01] transition-colors ${theme === 'dark' ? 'border-zinc-900/40' : 'border-zinc-200/60'}`}>
                           <td className="p-3">
                             <span className="font-bold text-emerald-400 text-[11px] block">[{course.courseCode}]</span>
                             <span className={`text-[11px] font-medium ${theme === 'dark' ? 'text-zinc-200' : 'text-zinc-800'}`}>{course.courseName}</span>
@@ -405,10 +401,10 @@ export default function CrudCoursesByYearPage() {
                           </td>
                           <td className="p-3 text-center">
                             <div className="flex flex-col sm:flex-row gap-1 justify-center">
-                              <button onClick={() => startEditCourse(course)} className="px-2 py-1 bg-cyan-500/10 border border-cyan-500/30 hover:bg-cyan-500 hover:text-white rounded text-cyan-400 text-[9px] cursor-pointer transition-all shadow-sm">
+                              <button type="button" onClick={() => startEditCourse(course)} className="px-2 py-1 bg-cyan-500/10 border border-cyan-500/30 hover:bg-cyan-500 hover:text-white rounded text-cyan-400 text-[9px] cursor-pointer transition-all shadow-sm">
                                 แก้ไข
                               </button>
-                              <button onClick={() => handleDeleteCourse(course._id, course.courseCode)} className="px-2 py-1 bg-red-500/10 border border-red-500/30 hover:bg-red-500 hover:text-white rounded text-red-400 text-[9px] cursor-pointer transition-all shadow-sm">
+                              <button type="button" onClick={() => handleDeleteCourse(course._id, course.courseCode)} className="px-2 py-1 bg-red-500/10 border border-red-500/30 hover:bg-red-500 hover:text-white rounded text-red-400 text-[9px] cursor-pointer transition-all shadow-sm">
                                 ลบ
                               </button>
                             </div>
