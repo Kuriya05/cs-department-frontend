@@ -3,11 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
-
-// ==========================================
-// 🌐 CONFIG: API BASE URL (ดึงจาก Environment Variable บน Vercel อัตโนมัติ)
-// ==========================================
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://cs-department-backend.onrender.com/api/v1';
+// 🔌 นำเข้า api ตัวกลางที่เราปรับแต่งไว้ (สามารถเปลี่ยนเป็น '@/lib/api' ได้ตามโครงสร้างโปรเจกต์ของคุณ)
+import api from '@/lib/api';
 
 // ==========================================
 // ❄️ AMBIENT COMPONENT: Diamond Dust Background
@@ -20,7 +17,6 @@ interface Snowflake {
 function DiamondDustBackground({ theme = "dark", speed = 0.4 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null); 
   const containerRef = useRef<HTMLDivElement>(null);
-
   const color = theme === "dark" ? "rgba(224, 192, 136, 0.35)" : "rgba(180, 140, 80, 0.25)";
   
   useEffect(() => {
@@ -122,7 +118,6 @@ export default function CompleteCrudStudentsPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
 
-  // 🟢 [แก้ไขจุดพัง]: ขยาย Type ของ risk และ status เพื่อให้รองรับค่าระดับอื่นนอกจาก 'None' และ 'Active'
   const initialFormState = {
     name: '',
     studentId: '',
@@ -140,52 +135,49 @@ export default function CompleteCrudStudentsPage() {
 
   const [formData, setFormData] = useState(initialFormState);
 
+  // 📖 READ COURSES: ดึงรายวิชาผ่านตัวกลาง Axios Instance
   const fetchAvailableCourses = async () => {
     try {
       setCourseFetchError(null);
-      // 🌐 ปรับเป็น Dynamic URL รองรับระบบ Vercel
-      const res = await fetch(`${API_BASE_URL}/courses`);
-      
-      if (res.ok) {
-        const payload = await res.json();
-        const extractedCourses = Array.isArray(payload) 
-          ? payload 
-          : (payload.data || payload.courses || []);
+      const res = await api.get('/api/v1/courses');
+      const payload = res.data;
+      const extractedCourses = Array.isArray(payload) 
+        ? payload 
+        : (payload.data || payload.courses || []);
           
-        setDbCourses(extractedCourses);
-      } else {
-        // Fallback Route
-        const fallbackBase = API_BASE_URL.replace('/api/v1', '');
-        const fallbackRes = await fetch(`${fallbackBase}/courses/all/selection`);
-        if (fallbackRes.ok) {
-          const fallbackPayload = await fallbackRes.json();
-          const extractedFallback = Array.isArray(fallbackPayload) ? fallbackPayload : (fallbackPayload.data || []);
-          setDbCourses(extractedFallback);
-        } else {
-          setCourseFetchError(`สถานะการเชื่อมต่อล้มเหลว: ${res.status}`);
-        }
-      }
-    } catch (err) {
+      setDbCourses(extractedCourses);
+    } catch (err: any) {
       console.error('ไม่สามารถโหลดข้อมูลรายวิชาจากคลัง Database ได้:', err);
-      setCourseFetchError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์คลังวิชาหลักได้');
+      // Fallback Route กรณีเรียกเส้นแรกไม่เจอ
+      try {
+        const fallbackRes = await api.get('/api/v1/courses/all/selection');
+        const fallbackPayload = fallbackRes.data;
+        const extractedFallback = Array.isArray(fallbackPayload) ? fallbackPayload : (fallbackPayload.data || []);
+        setDbCourses(extractedFallback);
+      } catch (fallbackErr) {
+        setCourseFetchError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์คลังวิชาหลักได้');
+      }
     }
   };
 
+  // 📖 READ STUDENTS: ดึงข้อมูลนักศึกษาผ่านตัวกลาง Axios Instance พร้อมระบบค้นหา
   const fetchStudents = async () => {
     try {
-      // 🌐 ปรับเป็น Dynamic URL รองรับระบบ Vercel
-      let url = `${API_BASE_URL}/students?page=${currentPage}&limit=5&search=${search}`;
+      let url = `/api/v1/students?page=${currentPage}&limit=5&search=${search}`;
       if (selectedRisk) url += `&risk=${selectedRisk}`;
       
-      const res = await fetch(url);
-      if (res.ok) {
-        const result = await res.json();
-        setStudents(result.data);
-        setTotalPages(result.meta.totalPages);
-        setTotalItems(result.meta.total);
+      const res = await api.get(url);
+      const result = res.data;
+      
+      if (result) {
+        setStudents(result.data || []);
+        if (result.meta) {
+          setTotalPages(result.meta.totalPages || 1);
+          setTotalItems(result.meta.total || 0);
+        }
       }
     } catch (err) {
-      console.error('ไม่สามารถเชื่อมต่อ API ได้:', err);
+      console.error('ไม่สามารถเชื่อมต่อ API ข้อมูลนักศึกษาได้:', err);
     }
   };
 
@@ -212,6 +204,7 @@ export default function CompleteCrudStudentsPage() {
     }
   };
 
+  // ➕ CREATE & ✏️ UPDATE: ส่งข้อมูลชุดบันทึกผ่าน Axios ตัวกลาง
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -232,32 +225,18 @@ export default function CompleteCrudStudentsPage() {
     };
 
     try {
-      let res;
-      // 🌐 ปรับเป็น Dynamic URL รองรับระบบ Vercel
       if (isEditing && editingTargetId) {
-        res = await fetch(`${API_BASE_URL}/students/${editingTargetId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+        await api.patch(`/api/v1/students/${editingTargetId}`, payload);
+        alert('🔄 อัปเดตข้อมูลนักศึกษาเรียบร้อย!');
       } else {
-        res = await fetch(`${API_BASE_URL}/students`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+        await api.post('/api/v1/students', payload);
+        alert('🎯 เพิ่มนักศึกษาใหม่เข้าระบบสำเร็จ!');
       }
-
-      if (res.ok) {
-        alert(isEditing ? '🔄 อัปเดตข้อมูลนักศึกษาเรียบร้อย!' : '🎯 เพิ่มนักศึกษาใหม่เข้าระบบสำเร็จ!');
-        handleCancelEdit();
-        fetchStudents();
-      } else {
-        const err = await res.json();
-        alert(`⛔ [Error]: ${err.message}`);
-      }
-    } catch (err) {
-      alert('เกิดข้อผิดพลาดในการติดต่อระบบ');
+      handleCancelEdit();
+      fetchStudents();
+    } catch (err: any) {
+      const errMsg = err.response?.data?.message || 'เกิดข้อผิดพลาดในการติดต่อระบบหลังบ้าน';
+      alert(`⛔ [Error]: ${Array.isArray(errMsg) ? errMsg.join(', ') : errMsg}`);
     } finally {
       setIsLoading(false);
     }
@@ -274,11 +253,11 @@ export default function CompleteCrudStudentsPage() {
       gpa: student.gpa,
       attendanceRate: student.attendanceRate,
       droppedCourses: student.droppedCourses,
-      risk: student.risk as any, // 🟢 [แก้ไขจุดพังด่านสุดท้าย]: ใส่ความปลอดภัย as any เคลียร์ปัญหา Vercel Type Check
+      risk: student.risk as any, 
       status: student.status,
       major: student.major,
       courses: student.courses || [], 
-      lecturersStr: student.lecturers.join(', ')
+      lecturersStr: student.lecturers ? student.lecturers.join(', ') : ''
     });
   };
 
@@ -288,27 +267,22 @@ export default function CompleteCrudStudentsPage() {
     setFormData(initialFormState);
   };
 
+  // 🗑️ DELETE: ลบประวัตินักศึกษาผ่าน Axios Instance
   const handleDelete = async (idOrStudentId: string, name: string) => {
     if (!confirm(`⚠️ คุณแน่ใจใช่ไหมที่จะลบข้อมูลของ "${name}" ออกจากระบบถาวร?`)) return;
     
     try {
-      // 🌐 ปรับเป็น Dynamic URL รองรับระบบ Vercel
-      const res = await fetch(`${API_BASE_URL}/students/${idOrStudentId}`, {
-        method: 'DELETE'
-      });
-
-      if (res.ok) {
-        alert('❌ ลบข้อมูลนักศึกษาเรียบร้อยแล้ว!');
-        if (editingTargetId === idOrStudentId) handleCancelEdit();
-        fetchStudents();
-      } else {
-        alert('ไม่สามารถลบข้อมูลได้');
-      }
+      await api.delete(`/api/v1/students/${idOrStudentId}`);
+      alert('❌ ลบข้อมูลนักศึกษาเรียบร้อยแล้ว!');
+      if (editingTargetId === idOrStudentId) handleCancelEdit();
+      fetchStudents();
     } catch (err) {
       console.error(err);
+      alert('ไม่สามารถลบข้อมูลออกจากระบบ Cloud ได้');
     }
   };
 
+  // ⚡ SEED MOCK DATA
   const handleSeedData = async () => {
     setIsLoading(true);
     const mockDataset = [
@@ -318,20 +292,14 @@ export default function CompleteCrudStudentsPage() {
     ];
 
     try {
-      // 🌐 ปรับเป็น Dynamic URL รองรับระบบ Vercel
-      const res = await fetch(`${API_BASE_URL}/students/seed`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: mockDataset })
-      });
-      if (res.ok) {
-        setCurrentPage(1);
-        fetchStudents();
-        fetchAvailableCourses();
-        alert('🚀 Seed ข้อมูลระบบเข้าสู่ MongoDB เรียบร้อย!');
-      }
+      await api.post('/api/v1/students/seed', { data: mockDataset });
+      setCurrentPage(1);
+      fetchStudents();
+      fetchAvailableCourses();
+      alert('🚀 Seed ข้อมูลระบบเข้าสู่ MongoDB เรียบร้อย!');
     } catch (err) {
       console.error(err);
+      alert('Seed ข้อมูลไม่สำเร็จ ตรวจสอบโครงสร้าง Endpoint หลังบ้านอีกครั้ง');
     } finally {
       setIsLoading(false);
     }
@@ -573,8 +541,8 @@ export default function CompleteCrudStudentsPage() {
                             }`}>{st.risk}</span>
                           </td>
                           <td className="p-2.5 text-[9px] max-w-[130px] truncate">
-                            <div className={`truncate ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'}`}>📚 {st.courses.join(', ') || '-'}</div>
-                            <div className="truncate text-zinc-500">👨‍🏫 {st.lecturers.join(', ') || '-'}</div>
+                            <div className={`truncate ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'}`}>📚 {st.courses ? st.courses.join(', ') : '-'}</div>
+                            <div className="truncate text-zinc-500">👨‍🏫 {st.lecturers ? st.lecturers.join(', ') : '-'}</div>
                           </td>
                           <td className="p-2.5 text-center">
                             <div className="flex gap-2 justify-center">
