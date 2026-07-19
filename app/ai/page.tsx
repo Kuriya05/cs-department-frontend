@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
+// 🔌 นำเข้า api instance ตัวกลาง เพื่อจัดการ Base URL และ Token อัตโนมัติ
+import api from '@/lib/api';
 
 interface RecommendedCourse {
   courseCode: string;
@@ -180,14 +182,14 @@ const EXTENDED_PRESETS = [
   { category: 'creative-game', th: '🎵 อยากทำระบบประมวลผลเสียงและสื่อมัลติมีเดียขั้นสูง', en: '🎵 Interactive Audio & Advanced Multimedia Processor' },
   { category: 'creative-game', th: '🦾 สนใจแนว Human-Computer Interaction พัฒนาอุปกรณ์สั่งการรูปแบบใหม่', en: '🦾 Human-Computer Interaction (HCI) Innovator' },
 
-  // 💡 Category: Smart, Trends & Off-topic Queries (ถามคำถามแปลกๆ อื่นๆ)
+  // 💡 Category: Smart, Trends & Off-topic Queries
   { category: 'smart-trends', th: '💵 แนะนำวิชาที่จบไปทำงานฟรีแลนซ์รับเงินต่างประเทศหลักแสนหน่อยครับ', en: '💵 Curate courses for High-Income International Freelancing' },
   { category: 'smart-trends', th: '👔 เรียนตัวไหนดีให้เหมาะกับเป้าหมายเป็น Tech Entrepreneur เจ้าของธุรกิจ', en: '👔 Ideal tracks for becoming a Tech Entrepreneur / Founder' },
   { category: 'smart-trends', th: '📉 ขอวิชาเลือกที่เน้นเขียนโค้ดน้อยๆ แต่ได้สกิลบริหารโปรเจกต์ไอทีสูง', en: '📉 Low-Code Managerial tracks for Tech Product Managers' },
   { category: 'smart-trends', th: '🌍 อยากทำงานสาย Green Tech / เทคโนโลยีลดคาร์บอนเพื่อสิ่งแวดล้อม', en: '🌍 Sustainable CleanTech & Green Computing pathways' },
   { category: 'smart-trends', th: '🔮 เทรนด์เทคโนโลยีในอีก 5 ปีข้างหน้าควรลงทะเบียนวิชาอะไรบ้างครับ', en: '🔮 Future-Proof tech stack recommendations for the next 5 years' },
   { category: 'smart-trends', th: '💯 ช่วยเลือกวิชาที่เก็บเกรด A ง่ายๆ โครงงานสนุกๆ ไม่เครียดเกินไปหน่อย', en: '💯 High-Yield, engaging courses optimized for smooth grading' },
-  { category: 'smart-trends', th: '🚀 แนะนำวิชาสำหรับคนที่เพิ่งย้ายสายมา แต่อยากเรียนให้ทันเพื่อนระดับท็อป', en: '🚀 Accelerated foundation pairing for Career Switchers' },
+  { category: 'smart-trends', th: '🚀 แนะนำวิชาสำหรับคนที่เพิ่งย้ายสายมา แแต่อยากเรียนให้ทันเพื่อนระดับท็อป', en: '🚀 Accelerated foundation pairing for Career Switchers' },
 ];
 
 const AI_LOADING_STAGES = [
@@ -210,12 +212,6 @@ export default function CourseRecommendPage() {
   const [activeCategory, setActiveCategory] = useState('all');
 
   const t = translations[lang];
-
-  // 📡 ฟังก์ชันจัดการ URL ของ API ป้องกันเครื่องหมาย Slash ซ้ำซ้อน
-  const getApiBaseUrl = useCallback(() => {
-    const envUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
-    return envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
-  }, []);
 
   // Filter Presets based on active tab
   const filteredPresets = EXTENDED_PRESETS.filter(
@@ -322,6 +318,7 @@ export default function CourseRecommendPage() {
     };
   }, [lang]);
 
+  // 📡 [POST] ยิงวิเคราะห์คำแนะนำผ่าน Instance ตัวกลาง แก้ไขปัญหา 404
   const triggerAnalysis = useCallback(async (targetGoal: string) => {
     if (!targetGoal.trim()) return;
     setLoading(true);
@@ -330,58 +327,48 @@ export default function CourseRecommendPage() {
     const cleanupIllusion = runAILoadingIllusion();
 
     try {
-      const token = localStorage.getItem('token');
-      const apiPath = getApiBaseUrl();
-      const res = await fetch(`${apiPath}/recommendations/suggest`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        },
-        body: JSON.stringify({ goal: targetGoal })
-      });
+      // เปลี่ยนจาก fetch เดิมมาใช้ api instance ตัวกลาง
+      const res = await api.post('/api/v1/recommendations/suggest', { goal: targetGoal });
       
-      if (res.ok) {
+      if (res.status === 200 || res.status === 201) {
         await new Promise((resolve) => setTimeout(resolve, 2400));
-        const data = await res.json();
-        setResult(data);
+        setResult(res.data);
         setMatchScorePercent(Math.floor(Math.random() * (98 - 86 + 1)) + 86); 
         setGoal('');
       } else {
-        console.warn('Backend returned an error. Switching seamlessly to Local Cognitive Engine...');
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        const smartLocalData = generateSmartLocalResponse(targetGoal);
-        setResult(smartLocalData);
-        setMatchScorePercent(Math.floor(Math.random() * (97 - 90 + 1)) + 90);
-        setGoal('');
+        throw new Error('Non-success status response');
       }
     } catch (err) {
-      console.warn('Network failure. Deploying Local Cognitive Engine:', err);
+      console.warn('Backend returned an error or network failure. Switching seamlessly to Local Cognitive Engine...');
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const smartLocalData = generateSmartLocalResponse(targetGoal);
       setResult(smartLocalData);
-      setMatchScorePercent(Math.floor(Math.random() * (96 - 89 + 1)) + 89);
+      setMatchScorePercent(Math.floor(Math.random() * (97 - 90 + 1)) + 90);
       setGoal('');
     } finally {
       setLoading(false);
       cleanupIllusion();
     }
-  }, [getApiBaseUrl, runAILoadingIllusion, generateSmartLocalResponse]);
+  }, [runAILoadingIllusion, generateSmartLocalResponse]);
 
-  // Hook จัดการดึงข้อมูลประวัติในฐานข้อมูลเมื่อเมาท์คอมโพเนนต์
+  // 📖 [READ] ดึงข้อมูลประวัติคำแนะนำแรกสุดผ่าน Instance ตัวกลาง แก้ไขปัญหา 404
   useEffect(() => {
     let isMounted = true;
     const fetchSavedRecommendation = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const apiPath = getApiBaseUrl();
-        const res = await fetch(`${apiPath}/recommendations/my-history`, {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-        });
-        if (res.ok && isMounted) {
-          const data = await res.json();
-          if (data && data.length > 0) {
-            setResult(data[0]);
+        const res = await api.get('/api/v1/recommendations/my-history');
+        if (res.status === 200 && isMounted) {
+          const resData = res.data;
+          const arrayData = Array.isArray(resData) ? resData : resData.data || [];
+          
+          if (arrayData.length > 0) {
+            const item = arrayData[0];
+            // ทำการ Map ข้อมูลให้รองรับโครงสร้างแบบประวัติล็อกและแบบหน้าแนะนำคู่ขนานกัน
+            setResult({
+              careerGoal: item.careerGoal || item.topic || '',
+              recommendCourses: item.recommendCourses || [],
+              reason: item.reason || item.result || ''
+            });
             setMatchScorePercent(Math.floor(Math.random() * (99 - 88 + 1)) + 88);
           }
         }
@@ -392,7 +379,7 @@ export default function CourseRecommendPage() {
 
     fetchSavedRecommendation();
     return () => { isMounted = false; };
-  }, [getApiBaseUrl]);
+  }, []);
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -416,10 +403,11 @@ export default function CourseRecommendPage() {
           
           <div className="px-6 lg:px-8 pt-4 flex justify-end gap-3 z-20 animate-[slideDown_0.5s_ease-out_both]">
             <div className={`flex p-1 rounded-xl border backdrop-blur-md transition-all duration-500 shadow-sm ${theme === 'dark' ? 'bg-zinc-950/60 border-zinc-900' : 'bg-white/80 border-zinc-200'}`}>
-              <button onClick={() => setLang('TH')} className={`px-3 py-1 text-[10px] font-mono tracking-wider font-bold rounded-lg cursor-pointer ${lang === 'TH' ? 'bg-cyan-500 text-black shadow-xs' : 'text-zinc-500 hover:text-cyan-500'}`}>TH</button>
-              <button onClick={() => setLang('EN')} className={`px-3 py-1 text-[10px] font-mono tracking-wider font-bold rounded-lg cursor-pointer ${lang === 'EN' ? 'bg-cyan-500 text-black shadow-xs' : 'text-zinc-500 hover:text-cyan-500'}`}>EN</button>
+              <button type="button" onClick={() => setLang('TH')} className={`px-3 py-1 text-[10px] font-mono tracking-wider font-bold rounded-lg cursor-pointer ${lang === 'TH' ? 'bg-cyan-500 text-black shadow-xs' : 'text-zinc-500 hover:text-cyan-500'}`}>TH</button>
+              <button type="button" onClick={() => setLang('EN')} className={`px-3 py-1 text-[10px] font-mono tracking-wider font-bold rounded-lg cursor-pointer ${lang === 'EN' ? 'bg-cyan-500 text-black shadow-xs' : 'text-zinc-500 hover:text-cyan-500'}`}>EN</button>
             </div>
             <button 
+              type="button"
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               className={`p-2.5 rounded-xl border backdrop-blur-md cursor-pointer text-cyan-500 shadow-sm ${theme === 'dark' ? 'bg-zinc-950/60 border-zinc-900' : 'bg-white/80 border-zinc-200'}`}
             >
