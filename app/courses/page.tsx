@@ -144,8 +144,7 @@ export default function AcademicAnalyticsPage() {
     const startTime = performance.now();
     try {
       // 1. ดึงข้อมูลรายชื่อนักศึกษาทั้งหมดผ่านตัวกลาง (จัดการ Base URL และ Prefix /api/v1 อัตโนมัติ)
-      // 🛠️ แก้ไข: เอา /api/v1 ออกเนื่องจาก api instance จัดการให้อยู่แล้ว
-      const studentsRes = await api.get('/students');
+      const studentsRes = await api.get('/api/v1/students');
       let allStudents = [];
       if (studentsRes.status === 200) {
         const payload = studentsRes.data;
@@ -155,8 +154,7 @@ export default function AcademicAnalyticsPage() {
       // 2. ดึงข้อมูลประวัติความเสี่ยงที่บันทึกไว้
       let riskRecords = [];
       try {
-        // 🛠️ แก้ไข: เอา /api/v1 ออกเนื่องจาก api instance จัดการให้อยู่แล้วเช่นกัน
-        const riskRes = await api.get('/students/risk-all');
+        const riskRes = await api.get('/api/v1/students/risk-all');
         if (riskRes.status === 200) {
           riskRecords = riskRes.data || [];
         }
