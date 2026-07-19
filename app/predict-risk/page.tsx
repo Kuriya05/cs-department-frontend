@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
+// 🔌 นำเข้า api instance ตัวกลาง เพื่อความปลอดภัยและเป็นระเบียบ
+import api from '@/lib/api';
 
-// ปรับ Type ของ risk ให้ตรงตาม Enum ของ NestJS Backend
 interface StudentProfile {
   _id: string;
   studentId?: string;
@@ -92,7 +93,7 @@ const translations = {
     hubBadge: 'Executive Intelligence Hub',
     titleMain: 'AI Student Risk',
     titleSub: 'Predictor Matrix',
-    description: 'ประเมินความเสี่ยงและจัดการสถานะพฤติกรรมของนักศึกษาผ่านระบบ NestJS Validation API ประจำปี 2026',
+    description: 'ประเมินความเสี่ยงและจัดการสถานะพฤทีพฤติกรรมของนักศึกษาผ่านระบบ NestJS Validation API ประจำปี 2026',
     formTitleCreate: '🎯 ประเมินความเสี่ยงใหม่ (Create Risk)',
     formTitleUpdate: '📝 แก้ไขดัชนีความเสี่ยง (Update Risk)',
     labelName: 'เลือกรายชื่อนักศึกษาในระบบ (Live Students)',
@@ -158,45 +159,33 @@ export default function RiskPredictionPage() {
   const [lang, setLang] = useState<'TH' | 'EN'>('TH');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   
-  // State หลักสำหรับดึงชุดข้อมูลนักศึกษาจาก NestJS
   const [students, setStudents] = useState<StudentProfile[]>([]);
   
-  // Form Operation States
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [form, setForm] = useState({ gpaDrop: 'no', withdrew: 'no', missingJobs: 'no' });
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const t = translations[lang];
 
-  // 📡 การจัดการ Endpoint API ให้ยืดหยุ่นผ่าน Environment Variables
-  const getApiUrl = useCallback(() => {
-    const envUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
-    return envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
-  }, []);
-
-  // 1. [READ] ดึงข้อมูลนักศึกษาทั้งหมดจากฐานข้อมูลหลัก
+  // 1. [READ] ดึงข้อมูลนักศึกษาทั้งหมดผ่าน Instance ตัวกลาง (แก้ปัญหา 404 เส้นทางหลุด)
   const fetchStudentsData = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
-      const baseUrl = getApiUrl();
-      const res = await fetch(`${baseUrl}/students?limit=100`, {
-        headers: { 'Authorization': token ? `Bearer ${token}` : '' }
-      });
-      if (res.ok) {
-        const payload = await res.json();
+      const res = await api.get('/api/v1/students?limit=100');
+      if (res.status === 200) {
+        const payload = res.data;
         const data = Array.isArray(payload) ? payload : payload.data || [];
         setStudents(data);
       }
     } catch (error) {
       console.error("Failed to query student database registry:", error);
     }
-  }, [getApiUrl]);
+  }, []);
 
   useEffect(() => {
     fetchStudentsData();
   }, [fetchStudentsData]);
 
-  // 2. [PATCH] คำนวณความเสี่ยงให้ออกเป็น Enum ตรงตามข้อกำหนด Backend
+  // 2. [PATCH] ส่งข้อมูลอัปเดตระดับความเสี่ยงผ่าน Instance ตัวกลาง
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -207,7 +196,6 @@ export default function RiskPredictionPage() {
       return;
     }
 
-    // 🧠 คำนวณความเสี่ยงแปลงค่าให้ออกมาเป็นตัวอักษร 'Low' | 'Medium' | 'High' | 'None'
     let score = 0;
     if (form.gpaDrop === 'yes') score += 40;
     if (form.withdrew === 'yes') score += 40;
@@ -222,42 +210,30 @@ export default function RiskPredictionPage() {
       calculatedRiskLevel = 'Low';
     }
 
-    // 🔥 ส่งเฉพาะฟิลด์ risk ที่ Backend อนุญาตเท่านั้น ป้องกัน Error 400
     const updatePayload = {
       risk: calculatedRiskLevel
     };
 
     try {
-      const token = localStorage.getItem('token');
-      const baseUrl = getApiUrl();
-      
-      const response = await fetch(`${baseUrl}/students/${targetStudentId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': token ? `Bearer ${token}` : ''
-        },
-        body: JSON.stringify(updatePayload)
-      });
+      const response = await api.patch(`/api/v1/students/${targetStudentId}`, updatePayload);
 
-      if (response.ok) {
+      if (response.status === 200 || response.status === 204) {
         alert("🎉 ประมวลผลและอัปเดตระดับความเสี่ยงลงระบบ NestJS สำเร็จ!");
-        fetchStudentsData(); // รีโหลดสเตตเพื่อความสดใหม่ของข้อมูล
+        fetchStudentsData(); 
         handleCancelEdit();
       } else {
-        const errorData = await response.json().catch(() => ({}));
-        alert(`❌ บันทึกไม่สำเร็จ (${response.status}): ${errorData.message || 'เซิร์ฟเวอร์ปฏิเสธการเข้าถึง'}`);
+        alert(`❌ บันทึกไม่สำเร็จ (${response.status})`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Transactional pipeline broken:", error);
-      alert("❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาตรวจสอบการรัน API");
+      const errorMsg = error.response?.data?.message || error.message;
+      alert(`❌ เกิดข้อผิดพลาด: ${Array.isArray(errorMsg) ? errorMsg.join(', ') : errorMsg}`);
     }
   };
 
   const handleEditTrigger = (student: StudentProfile) => {
     setEditingId(student._id);
     setSelectedStudentId(student._id);
-    // เซ็ตฟอร์มเริ่มต้นให้อิงตามระดับความเสี่ยงเดิม
     if (student.risk === 'High') {
       setForm({ gpaDrop: 'yes', withdrew: 'yes', missingJobs: 'no' });
     } else if (student.risk === 'Medium') {
@@ -275,17 +251,12 @@ export default function RiskPredictionPage() {
     setForm({ gpaDrop: 'no', withdrew: 'no', missingJobs: 'no' });
   };
 
-  // 3. [DELETE] ลบโปรไฟล์นักศึกษาผ่านแอนพอยต์หลัก
+  // 3. [DELETE] ลบข้อมูลนักศึกษาผ่าน Instance ตัวกลาง
   const handleDeleteLog = async (id: string) => {
     if (!confirm('คุณต้องการลบข้อมูลประวัตินักศึกษาคนนี้ออกจากระบบใช่หรือไม่?')) return;
     try {
-      const token = localStorage.getItem('token');
-      const baseUrl = getApiUrl();
-      const response = await fetch(`${baseUrl}/students/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': token ? `Bearer ${token}` : '' }
-      });
-      if (response.ok) {
+      const response = await api.delete(`/api/v1/students/${id}`);
+      if (response.status === 200 || response.status === 204) {
         alert("🗑️ ลบข้อมูลนักศึกษาเรียบร้อยแล้ว");
         setStudents(prev => prev.filter(item => item._id !== id));
         if (editingId === id) {
@@ -296,13 +267,12 @@ export default function RiskPredictionPage() {
       }
     } catch (error) {
       console.error("Failed to wipe out targeting record:", error);
+      alert("❌ ไม่สามารถลบข้อมูลได้ในขณะนี้");
     }
   };
 
-  // กรองการแสดงผล: ดึงเฉพาะนักศึกษาที่มีระดับความเสี่ยงระบุไว้ (และไม่ใช่ None เพื่อให้เป็นการเฝ้าระวัง)
   const riskWatchlist = students.filter(s => s.risk && s.risk !== 'None');
 
-  // ฟังก์ชัน Helper ช่วยแมปการแสดงสี Badge ตามเกณฑ์
   const getRiskColorClass = (risk?: string) => {
     if (risk === 'High') return 'text-red-500 bg-red-500/10 border-red-500/20';
     if (risk === 'Medium') return 'text-amber-500 bg-amber-500/10 border-amber-500/20';
@@ -312,7 +282,6 @@ export default function RiskPredictionPage() {
   return (
     <div className={`flex h-screen w-screen overflow-hidden font-sans relative transition-colors duration-700 ${theme === 'dark' ? 'bg-[#030305] text-zinc-300' : 'bg-[#f4f5f7] text-zinc-700'}`}>
       
-      {/* 🔮 Background FX Layers */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <div className={`absolute inset-0 transition-all duration-700 ${theme === 'dark' ? 'bg-gradient-to-b from-[#030305] via-[#06060a] to-[#030305]' : 'bg-gradient-to-b from-[#f8f9fa] via-[#eef1f5] to-[#f4f5f7]'}`} />
         <CosmicAuroraGlow theme={theme} />
@@ -325,7 +294,6 @@ export default function RiskPredictionPage() {
         <div className="flex-1 flex flex-col overflow-hidden">
           <Navbar />
           
-          {/* CONTROL SWITCHER PANEL */}
           <div className="px-6 lg:px-8 pt-4 flex justify-end gap-3 z-20 animate-[slideDown_0.5s_ease-out_both]">
             <div className={`flex p-1 rounded-xl border backdrop-blur-md transition-all duration-500 shadow-sm ${theme === 'dark' ? 'bg-zinc-950/60 border-zinc-900' : 'bg-white/80 border-zinc-200'}`}>
               <button onClick={() => setLang('TH')} className={`px-3 py-1 text-[10px] font-mono tracking-wider font-bold rounded-lg cursor-pointer ${lang === 'TH' ? 'bg-amber-500 text-white' : 'text-zinc-500'}`}>TH</button>
@@ -340,7 +308,6 @@ export default function RiskPredictionPage() {
             </button>
           </div>
 
-          {/* MAIN GRID BLOCK */}
           <main className="p-6 lg:p-8 flex-1 overflow-y-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-8 transform-gpu relative custom-scrollbar">
             
             <div className="space-y-2 lg:col-span-3 animate-[slideRight_0.6s_ease-out_both]">
@@ -451,7 +418,6 @@ export default function RiskPredictionPage() {
                   </div>
                 ) : (
                   riskWatchlist.map((student, i) => {
-                    // 🔮 Dynamic Translation Layer mapping via Enum Keys Safely
                     const riskKey = student.risk || 'None';
                     const dynamicReason = t[`${riskKey}_Reason` as keyof typeof t] || t.None_Reason;
                     const dynamicSuggest = t[`${riskKey}_Suggest` as keyof typeof t] || t.None_Suggest;
