@@ -143,7 +143,7 @@ export default function AcademicAnalyticsPage() {
     }
     const startTime = performance.now();
     try {
-      // 1. ดึงข้อมูลรายชื่อนักศึกษาทั้งหมดผ่านตัวกลาง (จัดการ Base URL และ Prefix /api/v1 อัตโนมัติ)
+      // 1. ดึงข้อมูลรายชื่อนักศึกษาทั้งหมดจากฐานข้อมูลหลัก
       const studentsRes = await api.get('/api/v1/students');
       let allStudents = [];
       if (studentsRes.status === 200) {
@@ -151,7 +151,7 @@ export default function AcademicAnalyticsPage() {
         allStudents = Array.isArray(payload) ? payload : payload.data || [];
       }
 
-      // 2. ดึงข้อมูลประวัติความเสี่ยงที่บันทึกไว้
+      // 2. ดึงข้อมูลประวัติความเสี่ยงสะสมรวม
       let riskRecords = [];
       try {
         const riskRes = await api.get('/api/v1/students/risk-all');
@@ -182,7 +182,7 @@ export default function AcademicAnalyticsPage() {
         if (rec.missingJobs === 'yes') missingJobsCount++;
       });
 
-      // 4. คำนวณอัตราส่วนเปอร์เซ็นต์จริง
+      // 4. คำนวณอัตราส่วนเปอร์เซ็นต์วิกฤต
       const calculatedDropRate = totalStudentsCount > 0 
         ? Math.min(Math.round((withdrewCount / Math.max(totalStudentsCount, 1)) * 100), 100)
         : 38; 
