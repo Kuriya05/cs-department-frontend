@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
+// 🔌 นำเข้า api instance ตัวกลาง (ปรับ Path ถอยหลังตามโครงสร้างโฟลเดอร์ของคุณได้เลย)
+import api from '@/lib/api'; 
 
 // ==========================================
 // ❄️ AMBIENT COMPONENT: Diamond Dust Background
@@ -133,7 +135,7 @@ export default function AcademicAnalyticsPage() {
 
   const t = translations[lang];
 
-  // 📡 ฟังก์ชันหลักในการดึงข้อมูลและประมวลผลสดให้ตรงกับระบบ Student CRUD
+  // 📡 ฟังก์ชันหลักในการดึงข้อมูลและประมวลผลสดผ่าน Axios Instance ตัวกลาง
   const handleFetchAnalytics = async (isBackground = false) => {
     if (!isBackground) {
       setIsLoading(true);
@@ -141,26 +143,21 @@ export default function AcademicAnalyticsPage() {
     }
     const startTime = performance.now();
     try {
-      const token = localStorage.getItem('token');
-      const headers: HeadersInit = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      // 🎯 ดึงลิงก์ API หลักจาก Environment Variables (ถ้าไม่มีให้โยงกลับเครื่องเป็น Fallback)
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
-
-      // 1. ดึงข้อมูลรายชื่อนักศึกษาทั้งหมดจาก Core Database (ปรับมาใช้ API_URL)
-      const studentsRes = await fetch(`${API_URL}/students`, { headers });
+      // 1. ดึงข้อมูลรายชื่อนักศึกษาทั้งหมดผ่านตัวกลาง (จัดการ Base URL และ Prefix /api/v1 อัตโนมัติ)
+      const studentsRes = await api.get('/api/v1/students');
       let allStudents = [];
-      if (studentsRes.ok) {
-        const payload = await studentsRes.json();
+      if (studentsRes.status === 200) {
+        const payload = studentsRes.data;
         allStudents = Array.isArray(payload) ? payload : payload.data || [];
       }
 
-      // 2. ดึงข้อมูลประวัติความเสี่ยงที่บันทึกไว้ (ปรับพาร์ทให้เข้ากับโครงสร้าง /api/v1/students)
+      // 2. ดึงข้อมูลประวัติความเสี่ยงที่บันทึกไว้
       let riskRecords = [];
       try {
-        const riskRes = await fetch(`${API_URL}/students/risk-all`, { headers });
-        if (riskRes.ok) riskRecords = await riskRes.json();
+        const riskRes = await api.get('/api/v1/students/risk-all');
+        if (riskRes.status === 200) {
+          riskRecords = riskRes.data || [];
+        }
       } catch (e) {
         console.warn("Could not fetch explicit risk logs, falling back to profile telemetry.");
       }
@@ -169,7 +166,6 @@ export default function AcademicAnalyticsPage() {
       let totalStudentsCount = allStudents.length;
       setTelemetryCount(totalStudentsCount);
 
-      // นับจำนวนคนที่มีสัญญาณถอนเรียน (W) หรือมีประวัติความเสี่ยง
       let withdrewCount = 0;
       let criticalGpaCount = 0;
       let missingJobsCount = 0;
@@ -180,7 +176,6 @@ export default function AcademicAnalyticsPage() {
         if (std.missingAssignments === true || std.missingJobs === 'yes') missingJobsCount++;
       });
 
-      // ดึงสถิติรวมจากตารางประเมินเพิ่มเติมมาร่วมวิเคราะห์ด้วย
       riskRecords.forEach((rec: any) => {
         if (rec.withdrew === 'yes') withdrewCount++;
         if (rec.gpaDrop === 'yes') criticalGpaCount++;
@@ -211,7 +206,7 @@ export default function AcademicAnalyticsPage() {
         ? `Initiate targeted intervention logic immediately. Academic advisors should schedule technical code reviews and clear pending assignments for identified students.`
         : `Curriculum progression paths remain nominal. Continue scheduled telemetry capture routines without mandatory overrides.`;
 
-      // 6. อัปเดต State ส่งต่อไปเรนเดอร์บนหน้าจอหรูหรา
+      // 6. อัปเดต State ส่งต่อไปเรนเดอร์บนหน้าจอ
       setAnalytics({
         courseName: withdrewCount > 0 || criticalGpaCount > 0 ? "Computer Programming / Data Structures" : "Advanced Computer Architecture",
         dropPercentage: calculatedDropRate > 0 ? calculatedDropRate : 12,
